@@ -153,19 +153,18 @@ const BookmarkForm: React.FC<BookmarkFormProps> = ({
       return;
     }
     
-    // Create bookmark data object
-    const bookmarkData: Omit<Bookmark, 'id' | 'createdAt' | 'updatedAt'> = {
-      title,
-      url,
-      description,
-      tags,
-      folder,
-      isFavorite,
-      favicon,
-      isArchived: false
-    };
-    
     try {
+      const bookmarkData: Omit<Bookmark, 'id' | 'createdAt' | 'updatedAt'> = {
+        url,
+        title,
+        description: description || '',
+        folder: folder || '',
+        tags,
+        isFavorite,
+        favicon: favicon || '',
+        isArchived: false
+      };
+      
       await onSubmit(bookmarkData);
       toast({
         title: initialData?.id ? 'Bookmark updated' : 'Bookmark created',
@@ -173,12 +172,12 @@ const BookmarkForm: React.FC<BookmarkFormProps> = ({
         duration: 3000,
         isClosable: true,
       });
-    } catch (err) {
+    } catch (error) {
       toast({
-        title: 'Error',
-        description: err instanceof Error ? err.message : 'Failed to save bookmark',
+        title: 'Error saving bookmark',
+        description: error instanceof Error ? error.message : 'Unknown error',
         status: 'error',
-        duration: 5000,
+        duration: 3000,
         isClosable: true,
       });
     }

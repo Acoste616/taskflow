@@ -4,12 +4,12 @@ export interface Bookmark {
   url: string;             // URL of the bookmarked resource
   description: string;     // Description or notes about the bookmark
   tags: string[];          // Array of tag strings for categorization
+  folder: string;          // Folder for organization
+  favicon: string;         // URL to favicon
+  isFavorite: boolean;     // Whether the bookmark is marked as favorite
+  isArchived: boolean;     // Whether the bookmark is archived
   createdAt: string;       // ISO date string
   updatedAt: string;       // ISO date string
-  folder: string | null;   // Optional folder for organization (null if in root)
-  favicon: string | null;  // Optional URL to favicon
-  isArchived: boolean;     // Whether the bookmark is archived
-  isFavorite: boolean;     // Whether the bookmark is marked as favorite
 }
 
 // Helper type for creating new bookmarks (omitting auto-generated fields)

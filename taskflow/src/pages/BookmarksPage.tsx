@@ -36,7 +36,8 @@ import {
   Text,
   useToast,
   Fade,
-  ScaleFade
+  ScaleFade,
+  InputRightElement
 } from '@chakra-ui/react';
 import { 
   FiPlus, 
@@ -49,13 +50,16 @@ import {
   FiTag, 
   FiChevronDown,
   FiRefreshCw,
-  FiInfo
+  FiInfo,
+  FiLink
 } from 'react-icons/fi';
 import Layout from '../components/layout/Layout';
 import BookmarkList from '../components/features/bookmarks/BookmarkList';
 import BookmarkForm from '../components/features/bookmarks/BookmarkForm';
 import { useBookmarkContext } from '../contexts/BookmarkContext';
 import type { Bookmark } from '../models/Bookmark';
+import BookmarkImporter from '../components/features/bookmarks/BookmarkImporter';
+import BookmarkCaptureService from '../services/bookmarkCaptureService';
 
 const BookmarksPage: React.FC = () => {
   const {
@@ -189,6 +193,93 @@ const BookmarksPage: React.FC = () => {
     }
   };
 
+  // Handle imported bookmarks
+  const handleImportBookmarks = async (importedBookmarks: Bookmark[]) => {
+    try {
+      // Add each imported bookmark
+      for (const bookmark of importedBookmarks) {
+        const { id, createdAt, updatedAt, ...newBookmark } = bookmark;
+        await addBookmark({
+          ...newBookmark,
+          isArchived: newBookmark.isArchived ?? false,
+          isFavorite: newBookmark.isFavorite ?? false,
+          tags: newBookmark.tags ?? [],
+          description: newBookmark.description ?? '',
+          favicon: newBookmark.favicon ?? '',
+          folder: newBookmark.folder ?? '',
+        });
+      }
+      
+      toast({
+        title: 'Import successful',
+        description: `Successfully imported ${importedBookmarks.length} bookmarks`,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (err) {
+      toast({
+        title: 'Import failed',
+        description: err instanceof Error ? err.message : 'Failed to import bookmarks',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    }
+  };
+
+  // Handle capturing current page
+  const handleCaptureCurrentPage = async () => {
+    try {
+      const bookmarkData = await BookmarkCaptureService.captureCurrentPage();
+      await addBookmark(bookmarkData);
+      
+      toast({
+        title: 'Page captured',
+        description: 'Successfully added the current page to bookmarks',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (err) {
+      toast({
+        title: 'Capture failed',
+        description: err instanceof Error ? err.message : 'Failed to capture the current page',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    }
+  };
+
+  // Handle capturing from URL
+  const [urlInput, setUrlInput] = useState('');
+  const handleCaptureFromUrl = async () => {
+    if (!urlInput.trim()) return;
+
+    try {
+      const bookmarkData = await BookmarkCaptureService.captureFromUrl(urlInput);
+      await addBookmark(bookmarkData);
+      setUrlInput('');
+      
+      toast({
+        title: 'URL captured',
+        description: 'Successfully added the URL to bookmarks',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (err) {
+      toast({
+        title: 'Capture failed',
+        description: err instanceof Error ? err.message : 'Failed to capture the URL',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    }
+  };
+
   const bgColor = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
   
@@ -197,15 +288,48 @@ const BookmarksPage: React.FC = () => {
       <Box mb={8}>
         <Flex justify="space-between" align="center" mb={6}>
           <Heading size="lg">Bookmarks</Heading>
-          <Button
-            leftIcon={<FiPlus />}
-            colorScheme="blue"
-            onClick={handleAddBookmark}
-            isLoading={isLoading}
-          >
-            New Bookmark
-          </Button>
+          <HStack spacing={4}>
+            <BookmarkImporter onImport={handleImportBookmarks} />
+            <Button
+              leftIcon={<FiLink />}
+              colorScheme="green"
+              onClick={handleCaptureCurrentPage}
+              isLoading={isLoading}
+            >
+              Capture Current Page
+            </Button>
+            <Button
+              leftIcon={<FiPlus />}
+              colorScheme="blue"
+              onClick={handleAddBookmark}
+              isLoading={isLoading}
+            >
+              New Bookmark
+            </Button>
+          </HStack>
         </Flex>
+        
+        {/* URL capture input */}
+        <Box mb={6}>
+          <InputGroup>
+            <Input
+              placeholder="Enter URL to capture..."
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleCaptureFromUrl()}
+            />
+            <InputRightElement width="4.5rem">
+              <Button
+                h="1.75rem"
+                size="sm"
+                onClick={handleCaptureFromUrl}
+                isDisabled={!urlInput.trim() || isLoading}
+              >
+                Capture
+              </Button>
+            </InputRightElement>
+          </InputGroup>
+        </Box>
         
         {/* Search and filters */}
         <Box 
