@@ -1,4 +1,4 @@
-import { Box, Flex, Heading, Text, SimpleGrid, Button } from '@chakra-ui/react';
+import { Box, Flex, Heading, Text, SimpleGrid, Button, useDisclosure, Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalCloseButton } from '@chakra-ui/react';
 import { FiPlus } from 'react-icons/fi';
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -6,12 +6,15 @@ import Layout from '../components/layout/Layout';
 import Summary from '../components/features/dashboard/Summary';
 import ProgressChart from '../components/features/dashboard/ProgressChart';
 import TaskList from '../components/features/tasks/TaskList';
+import TaskForm from '../components/features/tasks/TaskForm';
 import { useTaskContext } from '../contexts/TaskContext';
 import { useProjectContext } from '../contexts/ProjectContext';
+import type { Task } from '../models/Task';
 
 const Dashboard = () => {
-  const { tasks } = useTaskContext();
+  const { tasks, addTask } = useTaskContext();
   const { projects } = useProjectContext();
+  const { isOpen, onOpen, onClose } = useDisclosure();
   
   // Get recent tasks
   const recentTasks = [...tasks]
@@ -36,6 +39,12 @@ const Dashboard = () => {
     
     return dueDate <= nextDay;
   });
+
+  // Handle form submission
+  const handleSubmit = async (taskData: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => {
+    await addTask(taskData);
+    onClose();
+  };
   
   return (
     <Layout>
@@ -43,10 +52,9 @@ const Dashboard = () => {
         <Flex justify="space-between" align="center" mb={6}>
           <Heading size="lg">Dashboard</Heading>
           <Button
-            as={Link}
-            to="/tasks/new"
             leftIcon={<FiPlus />}
             colorScheme="blue"
+            onClick={onOpen}
           >
             New Task
           </Button>
@@ -108,6 +116,21 @@ const Dashboard = () => {
           )}
         </Box>
       </Box>
+
+      {/* Task form modal */}
+      <Modal isOpen={isOpen} onClose={onClose} size="xl">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Create New Task</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody pb={6}>
+            <TaskForm
+              onSubmit={handleSubmit}
+              onCancel={onClose}
+            />
+          </ModalBody>
+        </ModalContent>
+      </Modal>
     </Layout>
   );
 };

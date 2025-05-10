@@ -58,7 +58,7 @@ export const TaskProvider = ({ children }: TaskProviderProps) => {
 
     try {
       const savedTask = storageService.saveTask(newTask);
-      setTasks(prevTasks => [...prevTasks, newTask]);
+      setTasks(prevTasks => [...prevTasks, savedTask]);
       return savedTask;
     } catch (err) {
       setError('Failed to add task');
