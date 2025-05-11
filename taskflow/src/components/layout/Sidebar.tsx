@@ -26,6 +26,7 @@ import {
   FiStar,
   FiArchive
 } from 'react-icons/fi';
+import { FaRobot } from 'react-icons/fa';
 import { useState, useEffect } from 'react';
 import { useBookmarkContext } from '../../contexts/BookmarkContext';
 
@@ -189,6 +190,10 @@ const Sidebar = () => {
         </NavItem>
         
         <BookmarkSubmenu />
+        
+        <NavItem icon={FaRobot} to="/analysis">
+          Analiza AI
+        </NavItem>
         
         <NavItem icon={FiPieChart} to="/analytics">
           Analytics

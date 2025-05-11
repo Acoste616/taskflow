@@ -9,6 +9,7 @@ import ProjectsPage from './pages/ProjectsPage';
 import BookmarksPage from './pages/BookmarksPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import SettingsPage from './pages/SettingsPage';
+import BookmarkAnalysis from './components/BookmarkAnalysis';
 
 // Extended theme for Chakra UI with custom components and colors
 const theme = extendTheme({
@@ -195,6 +196,7 @@ function App() {
                   <Route path="/bookmarks" element={<BookmarksPage />} />
                   <Route path="/analytics" element={<AnalyticsPage />} />
                   <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="/analysis" element={<BookmarkAnalysis />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </Box>

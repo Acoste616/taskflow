@@ -1,0 +1,91 @@
+### Dodanie nowej zakładki
+POST http://localhost:3001/api/bookmarks
+Content-Type: application/json
+
+{
+  "title": "Przykład zakładki",
+  "category": "Nauka",
+  "group": "AI",
+  "status": "Aktywna",
+  "dateAdded": "2024-05-11T12:00:00.000Z",
+  "link": "https://example.com",
+  "summary": "Krótki opis zakładki wygenerowany automatycznie",
+  "tags": ["AI", "nauka", "przykład"],
+  "folder": "Przykłady"
+}
+
+###
+
+### Pobranie listy zakładek
+GET http://localhost:3001/api/bookmarks
+
+###
+
+### Pobranie zakładek z filtrowaniem po tagu
+GET http://localhost:3001/api/bookmarks?tag=AI
+
+###
+
+### Pobranie zakładek z filtrowaniem po folderze
+GET http://localhost:3001/api/bookmarks?folder=Przykłady
+
+###
+
+### Pobranie zakładek z wyszukiwaniem
+GET http://localhost:3001/api/bookmarks?search=AI
+
+###
+
+### Analiza treści zakładki przez lokalny LLM
+POST http://localhost:3001/api/bookmarks/analyze
+Content-Type: application/json
+
+{
+  "title": "Nowa zakładka do analizy",
+  "link": "https://wikipedia.org/wiki/Sztuczna_inteligencja"
+}
+
+###
+
+### Eksport zakładek do formatu JSON
+GET http://localhost:3001/api/bookmarks/export?format=json
+
+###
+
+### Eksport zakładek do formatu CSV
+GET http://localhost:3001/api/bookmarks/export?format=csv
+
+###
+
+### Utworzenie nowego tagu
+POST http://localhost:3001/api/tags
+Content-Type: application/json
+
+{
+  "name": "projektowanie"
+}
+
+###
+
+### Pobranie wszystkich tagów
+GET http://localhost:3001/api/tags
+
+###
+
+### Utworzenie nowego folderu
+POST http://localhost:3001/api/folders
+Content-Type: application/json
+
+{
+  "name": "Artykuły Techniczne"
+}
+
+###
+
+### Pobranie wszystkich folderów
+GET http://localhost:3001/api/folders
+
+###
+
+### Pobranie zakładek z konkretnego folderu
+GET http://localhost:3001/api/folders/1/bookmarks 

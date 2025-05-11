@@ -1,8 +1,9 @@
 import { v4 as uuidv4 } from 'uuid';
-import type { Bookmark, NewBookmark, UpdateBookmark } from '../models/Bookmark';
+import type { Bookmark as LocalBookmark, NewBookmark, UpdateBookmark } from '../models/Bookmark';
+import axios from 'axios';
 
 // Storage key for bookmarks
-const BOOKMARKS_STORAGE_KEY = 'taskflow_bookmarks';
+const STORAGE_KEY = 'bookmarks';
 
 // Custom error class for bookmark operations
 class BookmarkError extends Error {
@@ -13,9 +14,9 @@ class BookmarkError extends Error {
 }
 
 // Get all bookmarks from localStorage
-export const getBookmarks = (): Bookmark[] => {
+export const getBookmarks = (): LocalBookmark[] => {
   try {
-    const data = localStorage.getItem(BOOKMARKS_STORAGE_KEY);
+    const data = localStorage.getItem(STORAGE_KEY);
     return data ? JSON.parse(data) : [];
   } catch (error: unknown) {
     console.error('Error retrieving bookmarks:', error);
@@ -26,12 +27,12 @@ export const getBookmarks = (): Bookmark[] => {
 };
 
 // Save a bookmark (create or update)
-export const saveBookmark = (bookmark: NewBookmark & { id?: string }): Bookmark => {
+export const saveBookmark = (bookmark: NewBookmark & { id?: string }): LocalBookmark => {
   try {
     const bookmarks = getBookmarks();
     const now = new Date().toISOString();
     
-    let newBookmark: Bookmark;
+    let newBookmark: LocalBookmark;
     
     if (bookmark.id) {
       // Update existing bookmark
@@ -61,12 +62,12 @@ export const saveBookmark = (bookmark: NewBookmark & { id?: string }): Bookmark 
         description: bookmark.description ?? '',
         favicon: bookmark.favicon ?? null,
         folder: bookmark.folder ?? null
-      } as Bookmark;
+      } as LocalBookmark;
       
       bookmarks.push(newBookmark);
     }
     
-    localStorage.setItem(BOOKMARKS_STORAGE_KEY, JSON.stringify(bookmarks));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
     return newBookmark;
   } catch (error: unknown) {
     console.error('Error saving bookmark:', error);
@@ -80,10 +81,11 @@ export const saveBookmark = (bookmark: NewBookmark & { id?: string }): Bookmark 
 };
 
 // Delete a bookmark by ID
-export const deleteBookmark = (id: string): void => {
+export const deleteBookmark = (id: string): boolean => {
   try {
     const bookmarks = getBookmarks().filter(bookmark => bookmark.id !== id);
-    localStorage.setItem(BOOKMARKS_STORAGE_KEY, JSON.stringify(bookmarks));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
+    return true;
   } catch (error: unknown) {
     console.error('Error deleting bookmark:', error);
     throw new BookmarkError(
@@ -94,7 +96,7 @@ export const deleteBookmark = (id: string): void => {
 };
 
 // Archive a bookmark
-export const archiveBookmark = (id: string, archive: boolean = true): Bookmark => {
+export const archiveBookmark = (id: string, archive: boolean = true): LocalBookmark => {
   try {
     const bookmarks = getBookmarks();
     const bookmarkIndex = bookmarks.findIndex(bookmark => bookmark.id === id);
@@ -110,7 +112,7 @@ export const archiveBookmark = (id: string, archive: boolean = true): Bookmark =
     };
     
     bookmarks[bookmarkIndex] = updatedBookmark;
-    localStorage.setItem(BOOKMARKS_STORAGE_KEY, JSON.stringify(bookmarks));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
     
     return updatedBookmark;
   } catch (error: unknown) {
@@ -126,7 +128,7 @@ export const archiveBookmark = (id: string, archive: boolean = true): Bookmark =
 };
 
 // Toggle favorite status
-export const toggleFavorite = (id: string): Bookmark => {
+export const toggleFavorite = (id: string): LocalBookmark => {
   try {
     const bookmarks = getBookmarks();
     const bookmarkIndex = bookmarks.findIndex(bookmark => bookmark.id === id);
@@ -142,7 +144,7 @@ export const toggleFavorite = (id: string): Bookmark => {
     };
     
     bookmarks[bookmarkIndex] = updatedBookmark;
-    localStorage.setItem(BOOKMARKS_STORAGE_KEY, JSON.stringify(bookmarks));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
     
     return updatedBookmark;
   } catch (error: unknown) {
@@ -158,7 +160,7 @@ export const toggleFavorite = (id: string): Bookmark => {
 };
 
 // Get bookmarks by tag
-export const getBookmarksByTag = (tag: string): Bookmark[] => {
+export const getBookmarksByTag = (tag: string): LocalBookmark[] => {
   try {
     return getBookmarks().filter(bookmark => bookmark.tags.includes(tag));
   } catch (error: unknown) {
@@ -170,7 +172,7 @@ export const getBookmarksByTag = (tag: string): Bookmark[] => {
 };
 
 // Get bookmarks by folder
-export const getBookmarksByFolder = (folder: string | null): Bookmark[] => {
+export const getBookmarksByFolder = (folder: string | null): LocalBookmark[] => {
   try {
     return getBookmarks().filter(bookmark => bookmark.folder === folder);
   } catch (error: unknown) {
@@ -182,7 +184,7 @@ export const getBookmarksByFolder = (folder: string | null): Bookmark[] => {
 };
 
 // Get favorite bookmarks
-export const getFavoriteBookmarks = (): Bookmark[] => {
+export const getFavoriteBookmarks = (): LocalBookmark[] => {
   try {
     return getBookmarks().filter(bookmark => bookmark.isFavorite);
   } catch (error: unknown) {
@@ -194,7 +196,7 @@ export const getFavoriteBookmarks = (): Bookmark[] => {
 };
 
 // Get non-archived bookmarks
-export const getActiveBookmarks = (): Bookmark[] => {
+export const getActiveBookmarks = (): LocalBookmark[] => {
   try {
     return getBookmarks().filter(bookmark => !bookmark.isArchived);
   } catch (error: unknown) {
@@ -206,7 +208,7 @@ export const getActiveBookmarks = (): Bookmark[] => {
 };
 
 // Get archived bookmarks
-export const getArchivedBookmarks = (): Bookmark[] => {
+export const getArchivedBookmarks = (): LocalBookmark[] => {
   try {
     return getBookmarks().filter(bookmark => bookmark.isArchived);
   } catch (error: unknown) {
@@ -214,5 +216,126 @@ export const getArchivedBookmarks = (): Bookmark[] => {
     throw new BookmarkError(
       `Failed to get archived bookmarks: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
+  }
+};
+
+const API_URL = 'http://localhost:3001/api';
+
+// Interfejsy dla danych API
+export interface ApiTag {
+  id?: number;
+  name: string;
+}
+
+export interface ApiFolder {
+  id?: number;
+  name: string;
+}
+
+export interface ApiBookmark {
+  id?: number;
+  title: string;
+  category?: string;
+  group?: string;
+  status?: string;
+  dateAdded?: string;
+  link: string;
+  summary?: string;
+  tags?: ApiTag[];
+  folder?: ApiFolder | null;
+}
+
+// Funkcje API dla zakładek
+export const apiBookmarkService = {
+  // Pobieranie wszystkich zakładek
+  getAll: async (filters?: { tag?: string; folder?: string; search?: string; status?: string }) => {
+    const params = new URLSearchParams();
+    if (filters?.tag) params.append('tag', filters.tag);
+    if (filters?.folder) params.append('folder', filters.folder);
+    if (filters?.search) params.append('search', filters.search);
+    if (filters?.status) params.append('status', filters.status);
+    
+    const response = await axios.get(`${API_URL}/bookmarks?${params.toString()}`);
+    return response.data;
+  },
+
+  // Pobieranie pojedynczej zakładki
+  getById: async (id: number) => {
+    const response = await axios.get(`${API_URL}/bookmarks/${id}`);
+    return response.data;
+  },
+
+  // Dodawanie nowej zakładki
+  create: async (bookmark: ApiBookmark) => {
+    const response = await axios.post(`${API_URL}/bookmarks`, bookmark);
+    return response.data;
+  },
+
+  // Aktualizacja zakładki
+  update: async (id: number, bookmark: ApiBookmark) => {
+    const response = await axios.put(`${API_URL}/bookmarks/${id}`, bookmark);
+    return response.data;
+  },
+
+  // Usuwanie zakładki
+  delete: async (id: number) => {
+    await axios.delete(`${API_URL}/bookmarks/${id}`);
+  },
+
+  // Analiza zakładki przez LLM
+  analyze: async (bookmark: Partial<ApiBookmark>) => {
+    const response = await axios.post(`${API_URL}/bookmarks/analyze`, bookmark);
+    return response.data;
+  },
+
+  // Eksport zakładek
+  export: async (format: 'json' | 'csv' = 'json') => {
+    window.location.href = `${API_URL}/bookmarks/export?format=${format}`;
+  }
+};
+
+// Funkcje API dla tagów
+export const apiTagService = {
+  // Pobieranie wszystkich tagów
+  getAll: async () => {
+    const response = await axios.get(`${API_URL}/tags`);
+    return response.data;
+  },
+
+  // Dodawanie nowego tagu
+  create: async (name: string) => {
+    const response = await axios.post(`${API_URL}/tags`, { name });
+    return response.data;
+  },
+
+  // Usuwanie tagu
+  delete: async (id: number) => {
+    await axios.delete(`${API_URL}/tags/${id}`);
+  }
+};
+
+// Funkcje API dla folderów
+export const apiFolderService = {
+  // Pobieranie wszystkich folderów
+  getAll: async () => {
+    const response = await axios.get(`${API_URL}/folders`);
+    return response.data;
+  },
+
+  // Pobieranie zakładek z folderu
+  getBookmarks: async (id: number) => {
+    const response = await axios.get(`${API_URL}/folders/${id}/bookmarks`);
+    return response.data;
+  },
+
+  // Dodawanie nowego folderu
+  create: async (name: string) => {
+    const response = await axios.post(`${API_URL}/folders`, { name });
+    return response.data;
+  },
+
+  // Usuwanie folderu
+  delete: async (id: number) => {
+    await axios.delete(`${API_URL}/folders/${id}`);
   }
 }; 

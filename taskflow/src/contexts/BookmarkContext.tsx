@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { Bookmark, NewBookmark, UpdateBookmark } from '../models/Bookmark';
 import * as bookmarkService from '../services/bookmarkService';
+import { apiBookmarkService } from '../services/bookmarkService';
 
 interface BookmarkContextType {
   bookmarks: Bookmark[];
@@ -17,6 +18,7 @@ interface BookmarkContextType {
   getBookmarksByTag: (tag: string) => Bookmark[];
   getBookmarksByFolder: (folder: string | null) => Bookmark[];
   clearError: () => void;
+  refreshBookmarks: () => Promise<void>;
 }
 
 const BookmarkContext = createContext<BookmarkContextType | undefined>(undefined);
@@ -38,22 +40,65 @@ export const BookmarkProvider = ({ children }: BookmarkProviderProps) => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Load bookmarks from localStorage on component mount
-  useEffect(() => {
-    const loadBookmarks = async () => {
+  // Funkcja do pobierania zakładek z API
+  const fetchBookmarksFromAPI = async () => {
+    try {
+      const apiBookmarks = await apiBookmarkService.getAll();
+      
+      // Przekształć API bookmarks do formatu lokalnych bookmarks
+      const transformedBookmarks = apiBookmarks.map((apiBookmark: any) => ({
+        id: apiBookmark.id.toString(),
+        title: apiBookmark.title,
+        url: apiBookmark.link,
+        description: apiBookmark.summary || '',
+        category: apiBookmark.category,
+        group: apiBookmark.group,
+        status: apiBookmark.status,
+        folder: apiBookmark.folder?.name || null,
+        tags: apiBookmark.tags?.map((tag: any) => tag.name) || [],
+        isFavorite: false,
+        isArchived: false,
+        favicon: null,
+        createdAt: apiBookmark.dateAdded || new Date().toISOString(),
+        updatedAt: apiBookmark.updatedAt || new Date().toISOString()
+      }));
+
+      // Zaktualizuj stan bookmarks
+      setBookmarks(transformedBookmarks);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching bookmarks from API:', err);
+      setError('Failed to load bookmarks from API');
+      
+      // W przypadku błędu, spróbuj załadować z localStorage jako fallback
       try {
         const loadedBookmarks = bookmarkService.getBookmarks();
         setBookmarks(loadedBookmarks);
-        setError(null);
-      } catch (err) {
-        console.error('Error loading bookmarks:', err);
-        setError('Failed to load bookmarks');
-      } finally {
-        setIsLoading(false);
+      } catch (localError) {
+        console.error('Error loading bookmarks from localStorage:', localError);
       }
-    };
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    loadBookmarks();
+  // Funkcja publiczna do ręcznego odświeżania zakładek
+  const refreshBookmarks = async () => {
+    setIsLoading(true);
+    await fetchBookmarksFromAPI();
+  };
+
+  // Load bookmarks from API on component mount
+  useEffect(() => {
+    fetchBookmarksFromAPI();
+    
+    // Ustaw interwał odświeżania co 30 sekund
+    const refreshInterval = setInterval(() => {
+      fetchBookmarksFromAPI();
+    }, 30000);
+    
+    // Wyczyść interwał przy odmontowaniu komponentu
+    return () => clearInterval(refreshInterval);
   }, []);
 
   // Get favorite bookmarks
@@ -70,6 +115,10 @@ export const BookmarkProvider = ({ children }: BookmarkProviderProps) => {
     try {
       const savedBookmark = bookmarkService.saveBookmark(bookmarkData);
       setBookmarks(prevBookmarks => [...prevBookmarks, savedBookmark]);
+      
+      // Odśwież dane z API po dodaniu zakładki
+      setTimeout(fetchBookmarksFromAPI, 500);
+      
       setError(null);
       return savedBookmark;
     } catch (err) {
@@ -98,6 +147,9 @@ export const BookmarkProvider = ({ children }: BookmarkProviderProps) => {
         prevBookmarks.map(bookmark => (bookmark.id === id ? updatedBookmark : bookmark))
       );
       
+      // Odśwież dane z API po aktualizacji zakładki
+      setTimeout(fetchBookmarksFromAPI, 500);
+      
       setError(null);
       return updatedBookmark;
     } catch (err) {
@@ -112,6 +164,10 @@ export const BookmarkProvider = ({ children }: BookmarkProviderProps) => {
     try {
       bookmarkService.deleteBookmark(id);
       setBookmarks(prevBookmarks => prevBookmarks.filter(bookmark => bookmark.id !== id));
+      
+      // Odśwież dane z API po usunięciu zakładki
+      setTimeout(fetchBookmarksFromAPI, 500);
+      
       setError(null);
     } catch (err) {
       console.error('Error deleting bookmark:', err);
@@ -175,7 +231,8 @@ export const BookmarkProvider = ({ children }: BookmarkProviderProps) => {
     archiveBookmark,
     getBookmarksByTag,
     getBookmarksByFolder,
-    clearError
+    clearError,
+    refreshBookmarks
   };
 
   return <BookmarkContext.Provider value={value}>{children}</BookmarkContext.Provider>;
