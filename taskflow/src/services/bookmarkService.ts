@@ -81,13 +81,31 @@ export const saveBookmark = (bookmark: NewBookmark & { id?: string }): LocalBook
 };
 
 // Delete a bookmark by ID
-export const deleteBookmark = (id: string): boolean => {
+export const deleteBookmark = async (id: string): Promise<void> => {
   try {
-    const bookmarks = getBookmarks().filter(bookmark => bookmark.id !== id);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
-    return true;
+    // First try to delete from API
+    try {
+      await apiBookmarkService.deleteBookmark(id);
+    } catch (apiError) {
+      console.warn('Failed to delete bookmark from API:', apiError);
+      // Continue with local deletion if API fails
+    }
+
+    // Then delete from local storage
+    const bookmarks = getBookmarks();
+    const bookmarkExists = bookmarks.some(bookmark => bookmark.id === id);
+    
+    if (!bookmarkExists) {
+      throw new BookmarkError(`Bookmark with id ${id} not found`, id);
+    }
+
+    const updatedBookmarks = bookmarks.filter(bookmark => bookmark.id !== id);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedBookmarks));
   } catch (error: unknown) {
     console.error('Error deleting bookmark:', error);
+    if (error instanceof BookmarkError) {
+      throw error;
+    }
     throw new BookmarkError(
       `Failed to delete bookmark: ${error instanceof Error ? error.message : 'Unknown error'}`,
       id
@@ -291,7 +309,22 @@ export const apiBookmarkService = {
   // Eksport zakładek
   export: async (format: 'json' | 'csv' = 'json') => {
     window.location.href = `${API_URL}/bookmarks/export?format=${format}`;
-  }
+  },
+
+  // Delete a bookmark
+  deleteBookmark: async (id: string): Promise<void> => {
+    try {
+      const response = await axios.delete(`${API_URL}/bookmarks/${id}`);
+      if (response.status !== 204) {
+        throw new Error('Failed to delete bookmark');
+      }
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        throw new Error(error.response?.data?.error || 'Failed to delete bookmark');
+      }
+      throw error;
+    }
+  },
 };
 
 // Funkcje API dla tagów

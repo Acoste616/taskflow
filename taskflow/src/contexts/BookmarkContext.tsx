@@ -4,6 +4,9 @@ import type { Bookmark, NewBookmark, UpdateBookmark } from '../models/Bookmark';
 import * as bookmarkService from '../services/bookmarkService';
 import { apiBookmarkService } from '../services/bookmarkService';
 
+// Storage key for bookmarks
+const STORAGE_KEY = 'bookmarks';
+
 interface BookmarkContextType {
   bookmarks: Bookmark[];
   favoriteBookmarks: Bookmark[];
@@ -162,12 +165,26 @@ export const BookmarkProvider = ({ children }: BookmarkProviderProps) => {
   // Delete a bookmark
   const deleteBookmark = async (id: string): Promise<void> => {
     try {
-      bookmarkService.deleteBookmark(id);
-      setBookmarks(prevBookmarks => prevBookmarks.filter(bookmark => bookmark.id !== id));
-      
-      // Odśwież dane z API po usunięciu zakładki
-      setTimeout(fetchBookmarksFromAPI, 500);
-      
+      // Update local state immediately
+      setBookmarks(prevBookmarks => {
+        const updatedBookmarks = prevBookmarks.filter(bookmark => bookmark.id !== id);
+        // Save to localStorage to prevent reappearing after refresh
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedBookmarks));
+        } catch (error) {
+          console.error('Error saving bookmarks to localStorage:', error);
+        }
+        return updatedBookmarks;
+      });
+
+      // Then try to delete from API (don't block UI update)
+      try {
+        await apiBookmarkService.deleteBookmark(id);
+      } catch (apiError) {
+        console.warn('Failed to delete bookmark from API:', apiError);
+        // Already updated local storage, so just log the error
+      }
+
       setError(null);
     } catch (err) {
       console.error('Error deleting bookmark:', err);

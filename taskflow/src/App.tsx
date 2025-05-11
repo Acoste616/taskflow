@@ -1,5 +1,5 @@
 import { ChakraProvider, Box, extendTheme, ColorModeScript } from '@chakra-ui/react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { TaskProvider } from './contexts/TaskContext';
 import { ProjectProvider } from './contexts/ProjectContext';
 import { BookmarkProvider } from './contexts/BookmarkContext';
@@ -180,6 +180,49 @@ const theme = extendTheme({
   },
 });
 
+const router = createBrowserRouter(
+  [
+    {
+      path: "/",
+      element: <Dashboard />
+    },
+    {
+      path: "/tasks",
+      element: <TasksPage />
+    },
+    {
+      path: "/projects",
+      element: <ProjectsPage />
+    },
+    {
+      path: "/bookmarks",
+      element: <BookmarksPage />
+    },
+    {
+      path: "/analytics",
+      element: <AnalyticsPage />
+    },
+    {
+      path: "/settings",
+      element: <SettingsPage />
+    },
+    {
+      path: "/analysis",
+      element: <BookmarkAnalysis />
+    },
+    {
+      path: "*",
+      element: <Navigate to="/" replace />
+    }
+  ],
+  {
+    future: {
+      v7_startTransition: true,
+      v7_relativeSplatPath: true
+    }
+  }
+);
+
 function App() {
   return (
     <ChakraProvider theme={theme}>
@@ -187,20 +230,7 @@ function App() {
       <ProjectProvider>
         <TaskProvider>
           <BookmarkProvider>
-            <Router>
-              <Box minH="100vh" transition="background-color 0.2s">
-                <Routes>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/tasks" element={<TasksPage />} />
-                  <Route path="/projects" element={<ProjectsPage />} />
-                  <Route path="/bookmarks" element={<BookmarksPage />} />
-                  <Route path="/analytics" element={<AnalyticsPage />} />
-                  <Route path="/settings" element={<SettingsPage />} />
-                  <Route path="/analysis" element={<BookmarkAnalysis />} />
-                  <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
-              </Box>
-            </Router>
+            <RouterProvider router={router} />
           </BookmarkProvider>
         </TaskProvider>
       </ProjectProvider>

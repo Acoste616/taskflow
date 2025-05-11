@@ -51,7 +51,8 @@ import {
   FiChevronDown,
   FiRefreshCw,
   FiInfo,
-  FiLink
+  FiLink,
+  FiZap
 } from 'react-icons/fi';
 import Layout from '../components/layout/Layout';
 import BookmarkList from '../components/features/bookmarks/BookmarkList';
@@ -60,6 +61,7 @@ import { useBookmarkContext } from '../contexts/BookmarkContext';
 import type { Bookmark } from '../models/Bookmark';
 import BookmarkImporter from '../components/features/bookmarks/BookmarkImporter';
 import BookmarkCaptureService from '../services/bookmarkCaptureService';
+import NeuronBookmarkView from '../components/features/bookmarks/NeuronBookmarkView';
 
 const BookmarksPage: React.FC = () => {
   const {
@@ -486,6 +488,9 @@ const BookmarksPage: React.FC = () => {
                 {archivedBookmarks.length}
               </Badge>
             </Tab>
+            <Tab>
+              Neural View <FiZap style={{ marginLeft: '5px' }} />
+            </Tab>
           </TabList>
           
           <TabPanels>
@@ -524,6 +529,16 @@ const BookmarksPage: React.FC = () => {
                   onToggleFavorite={toggleFavorite}
                   onArchiveBookmark={(id) => archiveBookmark(id, false)}
                   emptyMessage="No archived bookmarks."
+                />
+              </ScaleFade>
+            </TabPanel>
+            
+            <TabPanel>
+              <ScaleFade in={true}>
+                <NeuronBookmarkView
+                  bookmarks={filteredBookmarks}
+                  onOpenBookmark={(url) => window.open(url, '_blank')}
+                  isLoading={isLoading}
                 />
               </ScaleFade>
             </TabPanel>
