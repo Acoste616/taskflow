@@ -10,6 +10,7 @@ import BookmarksPage from './pages/BookmarksPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import SettingsPage from './pages/SettingsPage';
 import BookmarkAnalysis from './components/BookmarkAnalysis';
+import { useState, useEffect } from 'react';
 
 // Extended theme for Chakra UI with custom components and colors
 const theme = extendTheme({
@@ -217,13 +218,48 @@ const router = createBrowserRouter(
   ],
   {
     future: {
-      v7_startTransition: true,
       v7_relativeSplatPath: true
     }
   }
 );
 
+// Hook to initialize AudioContext only after user interaction
+function useInitAudioContext() {
+  const [isAudioInitialized, setIsAudioInitialized] = useState(false);
+
+  useEffect(() => {
+    const initAudio = () => {
+      if (!isAudioInitialized) {
+        try {
+          // Create AudioContext on first user interaction
+          const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+          if (AudioContextClass) {
+            // Just create the context - it becomes the default for the page
+            new AudioContextClass();
+            setIsAudioInitialized(true);
+          }
+        } catch (error) {
+          console.error('Failed to initialize AudioContext:', error);
+        }
+      }
+    };
+
+    // Add listeners for common user interactions
+    const eventTypes = ['click', 'touchstart', 'keydown'];
+    eventTypes.forEach(type => window.addEventListener(type, initAudio, { once: true }));
+
+    return () => {
+      eventTypes.forEach(type => window.removeEventListener(type, initAudio));
+    };
+  }, [isAudioInitialized]);
+
+  return isAudioInitialized;
+}
+
 function App() {
+  // Initialize audio context after user interaction
+  useInitAudioContext();
+  
   return (
     <ChakraProvider theme={theme}>
       <ColorModeScript initialColorMode={theme.config.initialColorMode} />

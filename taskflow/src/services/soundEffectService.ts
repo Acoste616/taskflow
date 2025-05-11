@@ -1,5 +1,6 @@
-import * as Tone from 'tone';
+import { STORAGE_KEYS } from '../constants/storage';
 
+// Sound effect types
 export enum SoundEffectType {
   HOVER = 'hover',
   CLICK = 'click',
@@ -8,116 +9,168 @@ export enum SoundEffectType {
   ERROR = 'error'
 }
 
+// Sound settings interface
+interface SoundSettings {
+  isMuted: boolean;
+  currentPreset: string;
+}
+
 class SoundEffectService {
-  private synth: Tone.PolySynth;
+  private audioContext: AudioContext | null = null;
+  private gainNode: GainNode | null = null;
   private isMuted: boolean = false;
   private currentPreset: string = 'digital';
-  
-  // Available sound presets
-  private soundPresets = {
-    digital: {
-      [SoundEffectType.HOVER]: { note: 'C5', duration: '32n', velocity: 0.2 },
-      [SoundEffectType.CLICK]: { note: 'E5', duration: '16n', velocity: 0.3 },
-      [SoundEffectType.OPEN]: { note: 'G5', duration: '8n', velocity: 0.4 },
-      [SoundEffectType.SUCCESS]: { note: 'C6', duration: '4n', velocity: 0.5 },
-      [SoundEffectType.ERROR]: { note: 'B3', duration: '8n', velocity: 0.5 }
-    },
-    minimal: {
-      [SoundEffectType.HOVER]: { note: 'A4', duration: '64n', velocity: 0.1 },
-      [SoundEffectType.CLICK]: { note: 'B4', duration: '32n', velocity: 0.2 },
-      [SoundEffectType.OPEN]: { note: 'C5', duration: '16n', velocity: 0.3 },
-      [SoundEffectType.SUCCESS]: { note: 'E5', duration: '8n', velocity: 0.3 },
-      [SoundEffectType.ERROR]: { note: 'F3', duration: '16n', velocity: 0.3 }
-    },
-    sci_fi: {
-      [SoundEffectType.HOVER]: { note: 'D6', duration: '64n', velocity: 0.15 },
-      [SoundEffectType.CLICK]: { note: 'F6', duration: '32n', velocity: 0.25 },
-      [SoundEffectType.OPEN]: { note: 'A6', duration: '16n', velocity: 0.35 },
-      [SoundEffectType.SUCCESS]: { note: 'C7', duration: '8n', velocity: 0.4 },
-      [SoundEffectType.ERROR]: { note: 'D#3', duration: '8n', velocity: 0.4 }
-    }
-  };
+  private isInitialized: boolean = false;
 
   constructor() {
-    // Initialize Tone.js
-    this.synth = new Tone.PolySynth(Tone.Synth).toDestination();
-    
-    // Configure default synth settings
-    this.synth.set({
-      envelope: {
-        attack: 0.005,
-        decay: 0.1,
-        sustain: 0.3,
-        release: 1
-      }
-    });
-    
-    // Set initial volume
-    this.synth.volume.value = -12; // Lower volume (-12dB)
-    
     // Load settings from localStorage
     this.loadSettings();
   }
 
-  // Play a sound effect
-  public play(type: SoundEffectType): void {
-    if (this.isMuted) return;
+  // Initialize audio context safely
+  private initializeAudioContext(): void {
+    if (this.isInitialized) return;
     
     try {
-      const preset = this.soundPresets[this.currentPreset as keyof typeof this.soundPresets];
-      const sound = preset[type];
-      
-      if (sound) {
-        // Use setTimeout to avoid blocking the thread
-        setTimeout(() => {
-          this.synth.triggerAttackRelease(
-            sound.note,
-            sound.duration,
-            Tone.now(),
-            sound.velocity
-          );
-        }, 0);
+      // Create audio context
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass) {
+        this.audioContext = new AudioContextClass();
+        this.gainNode = this.audioContext.createGain();
+        this.gainNode.connect(this.audioContext.destination);
+        this.isInitialized = true;
       }
     } catch (error) {
-      console.error('Error playing sound effect:', error);
+      console.error('Failed to initialize AudioContext:', error);
     }
   }
 
-  // Toggle mute/unmute
+  // Play a sound effect
+  public play(type: SoundEffectType): void {
+    // Don't try to play if muted or not initialized
+    if (this.isMuted) return;
+    
+    // Initialize on first user interaction
+    if (!this.isInitialized) {
+      this.initializeAudioContext();
+    }
+    
+    // Exit if we still don't have audio initialized
+    if (!this.audioContext || !this.gainNode) return;
+    
+    // Resume audio context if it's suspended (browser requirement)
+    if (this.audioContext.state === 'suspended') {
+      this.audioContext.resume();
+    }
+    
+    try {
+      // Configure sound based on type and preset
+      let frequency = 440; // Default A4
+      let waveType: OscillatorType = 'sine';
+      let duration = 0.15;
+      let gain = 0.1;
+      
+      // Configure based on sound type and preset
+      switch(type) {
+        case SoundEffectType.HOVER:
+          frequency = this.currentPreset === 'digital' ? 440 : 
+                      this.currentPreset === 'minimal' ? 880 : 660;
+          waveType = this.currentPreset === 'sci_fi' ? 'sawtooth' : 'sine';
+          gain = 0.05;
+          duration = 0.1;
+          break;
+          
+        case SoundEffectType.CLICK:
+          frequency = this.currentPreset === 'digital' ? 523.25 : 
+                      this.currentPreset === 'minimal' ? 660 : 587.33;
+          waveType = this.currentPreset === 'digital' ? 'triangle' : 
+                     this.currentPreset === 'sci_fi' ? 'square' : 'sine';
+          gain = 0.1;
+          duration = 0.15;
+          break;
+          
+        case SoundEffectType.SUCCESS:
+          frequency = this.currentPreset === 'digital' ? 587.33 : 
+                      this.currentPreset === 'minimal' ? 784 : 880;
+          waveType = 'sine';
+          gain = 0.15;
+          duration = 0.2;
+          break;
+          
+        case SoundEffectType.OPEN:
+          frequency = this.currentPreset === 'digital' ? 659.25 : 
+                      this.currentPreset === 'minimal' ? 523.25 : 783.99;
+          waveType = this.currentPreset === 'sci_fi' ? 'sawtooth' : 'sine';
+          gain = 0.15;
+          duration = 0.2;
+          break;
+          
+        case SoundEffectType.ERROR:
+          frequency = this.currentPreset === 'digital' ? 196 : 
+                     this.currentPreset === 'minimal' ? 220 : 185;
+          waveType = this.currentPreset === 'sci_fi' ? 'square' : 'triangle';
+          gain = 0.15;
+          duration = 0.3;
+          break;
+      }
+      
+      // Create and configure oscillator
+      const oscillator = this.audioContext.createOscillator();
+      const gainNode = this.audioContext.createGain();
+      
+      oscillator.type = waveType;
+      oscillator.frequency.value = frequency;
+      gainNode.gain.value = gain;
+      
+      // Connect nodes
+      oscillator.connect(gainNode);
+      gainNode.connect(this.gainNode);
+      
+      // Play for specified duration
+      oscillator.start();
+      oscillator.stop(this.audioContext.currentTime + duration);
+      
+      // Clean up
+      oscillator.onended = () => {
+        oscillator.disconnect();
+        gainNode.disconnect();
+      };
+    } catch (error) {
+      console.error(`Error playing sound of type ${type}:`, error);
+    }
+  }
+
+  // Toggle mute
   public toggleMute(): boolean {
     this.isMuted = !this.isMuted;
     this.saveSettings();
     return this.isMuted;
   }
 
-  // Set sound preset
-  public setPreset(preset: string): void {
-    if (preset in this.soundPresets) {
-      this.currentPreset = preset;
-      this.saveSettings();
-    }
-  }
-
-  // Get current sound settings
-  public getSettings(): { isMuted: boolean; currentPreset: string } {
+  // Get sound settings
+  public getSettings(): SoundSettings {
     return {
       isMuted: this.isMuted,
       currentPreset: this.currentPreset
     };
   }
 
-  // Get available presets
-  public getPresets(): string[] {
-    return Object.keys(this.soundPresets);
+  // Set sound preset
+  public setPreset(preset: string): void {
+    if (['digital', 'minimal', 'sci_fi'].includes(preset)) {
+      this.currentPreset = preset;
+      this.saveSettings();
+    }
   }
 
   // Save settings to localStorage
   private saveSettings(): void {
     try {
-      localStorage.setItem('soundSettings', JSON.stringify({
+      const settings: SoundSettings = {
         isMuted: this.isMuted,
         currentPreset: this.currentPreset
-      }));
+      };
+      localStorage.setItem(STORAGE_KEYS.SOUND_SETTINGS, JSON.stringify(settings));
     } catch (error) {
       console.error('Error saving sound settings:', error);
     }
@@ -126,13 +179,13 @@ class SoundEffectService {
   // Load settings from localStorage
   private loadSettings(): void {
     try {
-      const settings = localStorage.getItem('soundSettings');
-      if (settings) {
-        const { isMuted, currentPreset } = JSON.parse(settings);
-        this.isMuted = isMuted;
+      const settingsString = localStorage.getItem(STORAGE_KEYS.SOUND_SETTINGS);
+      if (settingsString) {
+        const settings: SoundSettings = JSON.parse(settingsString);
+        this.isMuted = settings.isMuted;
         
-        if (currentPreset in this.soundPresets) {
-          this.currentPreset = currentPreset;
+        if (settings.currentPreset && ['digital', 'minimal', 'sci_fi'].includes(settings.currentPreset)) {
+          this.currentPreset = settings.currentPreset;
         }
       }
     } catch (error) {
@@ -141,5 +194,5 @@ class SoundEffectService {
   }
 }
 
-// Export singleton instance
+// Create singleton instance
 export const soundEffectService = new SoundEffectService(); 
