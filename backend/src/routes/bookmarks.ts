@@ -243,24 +243,53 @@ router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     
-    // Najpierw odłącz wszystkie tagi
-    await prisma.bookmark.update({
+    // Sprawdź czy zakładka istnieje
+    const bookmark = await prisma.bookmark.findUnique({
       where: { id: Number(id) },
-      data: {
-        tags: {
-          set: []
-        }
+      include: {
+        tags: true
       }
     });
-    
-    // Następnie usuń zakładkę
-    await prisma.bookmark.delete({
-      where: { id: Number(id) }
+
+    if (!bookmark) {
+      return res.status(404).json({ error: 'Bookmark not found' });
+    }
+
+    // Użyj transakcji do bezpiecznego usunięcia
+    await prisma.$transaction(async (tx) => {
+      // Najpierw odłącz wszystkie tagi
+      await tx.bookmark.update({
+        where: { id: Number(id) },
+        data: {
+          tags: {
+            set: []
+          }
+        }
+      });
+
+      // Usuń zakładkę
+      await tx.bookmark.delete({
+        where: { id: Number(id) }
+      });
     });
-    
+
     res.status(204).send();
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    console.error('Error deleting bookmark:', err);
+    
+    // Obsługa różnych typów błędów
+    if (err.code === 'P2025') {
+      return res.status(404).json({ error: 'Bookmark not found' });
+    }
+    
+    if (err.code === 'P2003') {
+      return res.status(400).json({ error: 'Cannot delete bookmark due to existing references' });
+    }
+    
+    res.status(500).json({ 
+      error: 'Failed to delete bookmark',
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
