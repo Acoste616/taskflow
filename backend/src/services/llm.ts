@@ -4,19 +4,23 @@ const LMSTUDIO_API_URL = process.env.LMSTUDIO_API_URL || 'http://localhost:1234/
 
 export async function analyzeBookmarkWithLLM(bookmark: any, examples: any[] = []) {
   const prompt = `
-Przeanalizuj poniższą zakładkę i wygeneruj następujące informacje:
+Jesteś ekspertem w analizie treści internetowych. Przeanalizuj dokładnie poniższą zakładkę i wygeneruj szczegółowe informacje:
 1. Tytuł (jeśli nie jest podany)
-2. Kategoria (np. Technologia, Nauka, Hobby, Praca)
+2. Kategoria (np. Technologia, Nauka, Hobby, Praca, Finance)
 3. Grupa (podkategoria, np. dla Technologia -> AI, Programowanie, Hardware)
 4. Status (np. Do przeczytania, W trakcie, Ukończone)
 5. Link (pozostaw bez zmian)
-6. Tagi (5-8 tagów opisujących treść)
-7. Krótkie podsumowanie (1-2 zdania)
-8. Sugerowany folder do organizacji
+6. Wartość merytoryczna treści (wysoka, średnia, niska)
+7. Tagi (5-7 tagów precyzyjnie opisujących treść)
+8. Krótkie podsumowanie (2-3 zdania streszczające główne tezy)
+9. Sugerowany folder do organizacji
+10. 3-5 kluczowych punktów wyciągniętych z treści
+11. Wydźwięk treści (pozytywny, negatywny, neutralny)
 
 Zakładka: ${JSON.stringify(bookmark, null, 2)}
 
-Przykłady tagów: programowanie, AI, machine learning, notatki, projekt, praca, nauka, artykuł, video
+Na podstawie adresu URL i tytułu wnioskuj o możliwej zawartości strony. Zauważ, że nie masz bezpośredniego dostępu do treści strony,
+więc musisz wykorzystać swoją wiedzę o różnych domenach i typach treści, aby podać jak najdokładniejsze informacje.
 
 Zwróć wynik TYLKO jako JSON w formacie:
 {
@@ -25,9 +29,12 @@ Zwróć wynik TYLKO jako JSON w formacie:
   "group": "...",
   "status": "Do przeczytania",
   "link": "...",
-  "tags": ["tag1", "tag2", "tag3"],
+  "contentValue": "wysoka|średnia|niska",
+  "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
   "summary": "...",
-  "suggestedFolder": "..."
+  "keypoints": ["punkt 1", "punkt 2", "punkt 3"],
+  "suggestedFolder": "...",
+  "sentiment": "pozytywny|negatywny|neutralny"
 }
 `;
 
@@ -42,7 +49,7 @@ Zwróć wynik TYLKO jako JSON w formacie:
     // Pobierz tekst odpowiedzi
     const responseText = response.data.choices[0].message.content.trim();
     
-    // Wyciągnij JSON z odpowiedzi (może być otoczony innym tekstem)
+    // Wyciągnij JSON z odpowiedzi
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       return JSON.parse(jsonMatch[0]);
@@ -59,9 +66,12 @@ Zwróć wynik TYLKO jako JSON w formacie:
       group: "Ogólne",
       status: "Do przeczytania",
       link: bookmark.link,
+      contentValue: "średnia",
       tags: [],
       summary: "Automatyczna analiza nie powiodła się.",
-      suggestedFolder: "Inne"
+      keypoints: ["Nie udało się wyodrębnić kluczowych punktów."],
+      suggestedFolder: "Inne",
+      sentiment: "neutralny"
     };
   }
 } 
