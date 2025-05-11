@@ -65,6 +65,8 @@ export interface ContentAnalysis {
   keypoints: string[];
   sentiment: 'positive' | 'negative' | 'neutral';
   suggestedTags: string[];
+  contentValue?: 'wysoka' | 'średnia' | 'niska';
+  suggestedFolder?: string;
   analyzed: boolean;
   lastAnalyzed: Date;
   error?: string;
@@ -329,6 +331,8 @@ ${prompt}
         keypoints: [],
         sentiment: 'neutral',
         suggestedTags: [...bookmark.tags],
+        contentValue: undefined,
+        suggestedFolder: undefined,
         analyzed: false,
         lastAnalyzed: new Date(),
       };
@@ -364,6 +368,8 @@ ${prompt}
         keypoints: [],
         sentiment: 'neutral',
         suggestedTags: [...bookmark.tags],
+        contentValue: undefined,
+        suggestedFolder: undefined,
         analyzed: false,
         lastAnalyzed: new Date(),
         error: error instanceof Error ? error.message : 'Unknown error analyzing content',
@@ -585,14 +591,14 @@ ${prompt}
   }
 
   /**
-   * Enhance analysis with LLM
+   * Enhance analysis using a local LLM with improved prompt
    */
   private async enhanceWithLLM(
     analysis: ContentAnalysis, 
     initialTags: string[], 
     contentContext: string
   ): Promise<ContentAnalysis> {
-    // Najpierw sprawdźmy, czy lokalny LLM jest dostępny
+    // Check if local LLM is available
     if (!this.isLLMAvailable) {
       console.log('Local LLM not available, using rule-based analysis');
       return this.enhanceWithRules(analysis, initialTags, contentContext);
@@ -600,34 +606,39 @@ ${prompt}
 
     try {
       const prompt = `
-You are an expert content analyzer. Your task is to analyze the following content and provide a structured analysis.
+Jesteś zaawansowanym narzędziem do analizy treści internetowych. Przeanalizuj dokładnie poniższą treść i zwróć kompleksową analizę.
 
-CONTENT TO ANALYZE:
+TREŚĆ DO ANALIZY:
 """
 ${contentContext}
 """
 
-INSTRUCTIONS:
-Analyze the above content and extract the following information:
-1. A concise one-sentence summary that captures the essence of the content
-2. The main topic of the content (single phrase)
-3. 3-5 key points extracted from the content
-4. 2-4 relevant categories from this list (choose only the most relevant ones): technology, business, finance, science, ai, development, entertainment, memes, health, news, social, education, other
-5. A sentiment analysis (must be one of: positive, negative, or neutral)
-6. 3-7 suggested tags for this content (short keywords that describe the content well)
+ZADANIE:
+Przeprowadź głęboką analizę powyższej treści i wyodrębnij następujące informacje:
+1. Zwięzłe podsumowanie (1-2 zdania), które ujmuje sedno treści
+2. Główny temat/zagadnienie treści (pojedyncze wyrażenie)
+3. Kluczowe punkty (3-5 najważniejszych informacji z treści)
+4. Kategorię treści (wybierz 2-4 najbardziej odpowiednie): technologia, biznes, finanse, nauka, ai, programowanie, rozrywka, memy, zdrowie, wiadomości, social media, edukacja, inne
+5. Ocenę wydźwięku treści (pozytywny, negatywny lub neutralny)
+6. Sugerowane tagi (5-7 krótkich słów kluczowych, które dobrze opisują treść)
+7. Określ wartość merytoryczną treści (wysoka, średnia, niska)
+8. Sugerowany folder dla organizacji tej zakładki
 
-IMPORTANT: Your response must be formatted as a valid JSON object with the following structure:
+FORMAT ODPOWIEDZI:
+Zwróć odpowiedź jako prawidłowy obiekt JSON o następującej strukturze:
 
 {
-  "summary": "your concise summary here",
-  "mainTopic": "main topic here",
-  "keypoints": ["point 1", "point 2", "point 3"],
-  "categories": ["category1", "category2"],
-  "sentiment": "positive|negative|neutral",
-  "suggestedTags": ["tag1", "tag2", "tag3"]
+  "summary": "zwięzłe podsumowanie",
+  "mainTopic": "główny temat",
+  "keypoints": ["punkt 1", "punkt 2", "punkt 3"],
+  "categories": ["kategoria1", "kategoria2"],
+  "sentiment": "pozytywny|negatywny|neutralny",
+  "contentValue": "wysoka|średnia|niska",
+  "suggestedTags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
+  "suggestedFolder": "nazwa folderu"
 }
 
-DO NOT include any explanations, introductions, or additional text. Provide ONLY the JSON object.
+NIE DODAWAJ żadnych wyjaśnień, wstępów ani dodatkowego tekstu. Zwróć WYŁĄCZNIE obiekt JSON.
       `;
 
       // Wywołaj lokalny LLM
@@ -640,23 +651,23 @@ DO NOT include any explanations, introductions, or additional text. Provide ONLY
           const jsonMatch = responseContent.match(jsonRegex);
           const jsonStr = jsonMatch ? jsonMatch[0] : responseContent;
           
-          // Próbujemy oczyścić odpowiedź z formatowania, które może przeszkadzać
+          // Clean response from formatting that might interfere
           const cleanedJson = jsonStr
             .replace(/```json/g, '')
             .replace(/```/g, '')
             .trim();
           
-          // Parsujemy odpowiedź jako JSON
+          // Parse response as JSON
           const llmAnalysis = JSON.parse(cleanedJson);
           
-          // Aktualizujemy analizę
+          // Update analysis
           if (llmAnalysis.summary) analysis.summary = llmAnalysis.summary;
           if (llmAnalysis.mainTopic) analysis.mainTopic = llmAnalysis.mainTopic;
           if (llmAnalysis.keypoints && Array.isArray(llmAnalysis.keypoints)) {
             analysis.keypoints = llmAnalysis.keypoints.filter((point: any) => point && typeof point === 'string');
           }
           
-          // Kategorie
+          // Categories
           if (llmAnalysis.categories && Array.isArray(llmAnalysis.categories)) {
             const validCategories = llmAnalysis.categories
               .filter((cat: string) => cat && typeof cat === 'string')
@@ -668,29 +679,39 @@ DO NOT include any explanations, introductions, or additional text. Provide ONLY
             }
           }
           
-          // Nastrój
+          // Sentiment
           if (llmAnalysis.sentiment && ['positive', 'negative', 'neutral'].includes(llmAnalysis.sentiment)) {
             analysis.sentiment = llmAnalysis.sentiment as 'positive' | 'negative' | 'neutral';
           }
           
-          // Tagi
+          // Content value
+          if (llmAnalysis.contentValue) {
+            analysis.contentValue = llmAnalysis.contentValue;
+          }
+          
+          // Suggested folder
+          if (llmAnalysis.suggestedFolder) {
+            analysis.suggestedFolder = llmAnalysis.suggestedFolder;
+          }
+          
+          // Tags
           if (llmAnalysis.suggestedTags && Array.isArray(llmAnalysis.suggestedTags)) {
             const validTags = llmAnalysis.suggestedTags
               .filter((tag: string) => tag && typeof tag === 'string')
               .map((tag: string) => tag.toLowerCase().trim());
             
-            // Łączymy tagi, eliminując duplikaty
+            // Combine tags, eliminating duplicates
             if (validTags.length > 0) {
               analysis.suggestedTags = [...new Set([...initialTags, ...validTags])];
             }
           }
           
-          // Oznaczamy, że analiza została przeprowadzona poprawnie
+          // Mark analysis as completed
           analysis.analyzed = true;
         } catch (parseError) {
           console.error('Error parsing LLM response:', parseError);
           console.log('Raw response:', responseContent);
-          // W przypadku błędu parsowania używamy analizy opartej na regułach
+          // On parsing error, use rule-based analysis
           return this.enhanceWithRules(analysis, initialTags, contentContext);
         }
       } else {
@@ -701,7 +722,7 @@ DO NOT include any explanations, introductions, or additional text. Provide ONLY
       return analysis;
     } catch (error) {
       console.error('Error in LLM analysis:', error);
-      // W przypadku jakiegokolwiek błędu, używamy analizy opartej na regułach
+      // On any error, use rule-based analysis
       return this.enhanceWithRules(analysis, initialTags, contentContext);
     }
   }
@@ -922,6 +943,46 @@ DO NOT include any explanations, introductions, or additional text. Provide ONLY
     this.workingEndpoint = LOCAL_LLM_CONFIG.endpoint;
     await this.checkLLMConnection();
     return this.isLLMAvailable;
+  }
+
+  /**
+   * Process a batch of bookmarks for analysis
+   * @param bookmarks Array of bookmarks to analyze
+   * @param progressCallback Optional callback to track progress
+   * @returns Promise resolving to a record of bookmark IDs and their analyses
+   */
+  public async analyzeBatch(
+    bookmarks: Bookmark[], 
+    progressCallback?: (processed: number, total: number) => void
+  ): Promise<Record<string, ContentAnalysis>> {
+    const results: Record<string, ContentAnalysis> = {};
+    const total = bookmarks.length;
+    
+    // Process in batches of 3 to avoid overwhelming the LLM
+    for (let i = 0; i < bookmarks.length; i += 3) {
+      const batch = bookmarks.slice(i, i + 3);
+      
+      // Process batch concurrently
+      const batchPromises = batch.map(bookmark => this.analyzeBookmark(bookmark));
+      const batchResults = await Promise.all(batchPromises);
+      
+      // Store results
+      batch.forEach((bookmark, index) => {
+        results[bookmark.id] = batchResults[index];
+      });
+      
+      // Call progress callback if provided
+      if (progressCallback) {
+        progressCallback(Math.min(i + 3, total), total);
+      }
+      
+      // Throttle requests to not overwhelm the LLM
+      if (i + 3 < bookmarks.length) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    return results;
   }
 }
 

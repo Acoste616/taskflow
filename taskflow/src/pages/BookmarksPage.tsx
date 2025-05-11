@@ -62,6 +62,7 @@ import type { Bookmark } from '../models/Bookmark';
 import BookmarkImporter from '../components/features/bookmarks/BookmarkImporter';
 import BookmarkCaptureService from '../services/bookmarkCaptureService';
 import NeuronBookmarkView from '../components/features/bookmarks/NeuronBookmarkView';
+import BookmarkDetailWithAnalysis from '../components/features/bookmarks/BookmarkDetailWithAnalysis';
 
 const BookmarksPage: React.FC = () => {
   const {
@@ -88,6 +89,9 @@ const BookmarksPage: React.FC = () => {
   
   // State for editing bookmark
   const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null);
+  
+  // State for viewing analysis
+  const [selectedBookmarkForAnalysis, setSelectedBookmarkForAnalysis] = useState<Bookmark | null>(null);
   
   // Get unique folders and tags
   const { folders, allTags } = useMemo(() => {
@@ -280,6 +284,11 @@ const BookmarksPage: React.FC = () => {
         isClosable: true,
       });
     }
+  };
+
+  // Handle viewing bookmark analysis
+  const handleViewAnalysis = (bookmark: Bookmark) => {
+    setSelectedBookmarkForAnalysis(bookmark);
   };
 
   const bgColor = useColorModeValue('white', 'gray.800');
@@ -502,6 +511,7 @@ const BookmarksPage: React.FC = () => {
                   onDeleteBookmark={handleDeleteBookmark}
                   onToggleFavorite={toggleFavorite}
                   onArchiveBookmark={archiveBookmark}
+                  onViewAnalysis={handleViewAnalysis}
                   emptyMessage="No bookmarks found. Add your first bookmark by clicking the 'New Bookmark' button above."
                 />
               </ScaleFade>
@@ -537,7 +547,7 @@ const BookmarksPage: React.FC = () => {
               <ScaleFade in={true}>
                 <NeuronBookmarkView
                   bookmarks={filteredBookmarks}
-                  onOpenBookmark={(url) => window.open(url, '_blank')}
+                  onOpenBookmark={(url: string) => window.open(url, '_blank')}
                   isLoading={isLoading}
                 />
               </ScaleFade>
@@ -565,6 +575,19 @@ const BookmarksPage: React.FC = () => {
           </ModalBody>
         </ModalContent>
       </Modal>
+      
+      {/* Bookmark analysis modal */}
+      {selectedBookmarkForAnalysis && (
+        <BookmarkDetailWithAnalysis
+          bookmark={selectedBookmarkForAnalysis}
+          onClose={() => setSelectedBookmarkForAnalysis(null)}
+          onUpdate={async (id, data) => {
+            await updateBookmark(id, data);
+          }}
+          isOpen={!!selectedBookmarkForAnalysis}
+          folders={folders}
+        />
+      )}
     </Layout>
   );
 };

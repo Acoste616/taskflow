@@ -31,7 +31,8 @@ import {
   FiArchive, 
   FiExternalLink, 
   FiDownload,
-  FiFolder
+  FiFolder,
+  FiActivity
 } from 'react-icons/fi';
 import Card from '../../common/Card';
 import type { Bookmark } from '../../../models/Bookmark';
@@ -42,6 +43,7 @@ interface BookmarkCardProps {
   onDelete: (id: string) => void;
   onToggleFavorite: (id: string) => void;
   onArchive: (id: string) => void;
+  onViewAnalysis?: (bookmark: Bookmark) => void;
 }
 
 const BookmarkCard: React.FC<BookmarkCardProps> = ({
@@ -50,6 +52,7 @@ const BookmarkCard: React.FC<BookmarkCardProps> = ({
   onDelete,
   onToggleFavorite,
   onArchive,
+  onViewAnalysis
 }) => {
   const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
   const cancelRef = React.useRef<HTMLButtonElement>(null);
@@ -205,6 +208,15 @@ const BookmarkCard: React.FC<BookmarkCardProps> = ({
               >
                 {bookmark.isArchived ? 'Unarchive' : 'Archive'}
               </MenuItem>
+              {onViewAnalysis && (
+                <MenuItem 
+                  icon={<FiActivity />} 
+                  onClick={() => onViewAnalysis(bookmark)}
+                  _hover={{ bg: menuHoverBg }}
+                >
+                  View Analysis
+                </MenuItem>
+              )}
               <MenuItem 
                 icon={<FiDownload />} 
                 onClick={handleDownload}

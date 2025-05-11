@@ -10,6 +10,7 @@ import BookmarksPage from './pages/BookmarksPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import SettingsPage from './pages/SettingsPage';
 import BookmarkAnalysis from './components/BookmarkAnalysis';
+import BookmarkAnalysisPage from './pages/BookmarkAnalysisPage';
 import { useState, useEffect } from 'react';
 
 // Extended theme for Chakra UI with custom components and colors
@@ -198,6 +199,10 @@ const router = createBrowserRouter(
     {
       path: "/bookmarks",
       element: <BookmarksPage />
+    },
+    {
+      path: "/bookmarks/analysis",
+      element: <BookmarkAnalysisPage />
     },
     {
       path: "/analytics",

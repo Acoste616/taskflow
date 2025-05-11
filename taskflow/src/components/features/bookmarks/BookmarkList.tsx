@@ -43,6 +43,7 @@ interface BookmarkListProps {
   onDeleteBookmark: (id: string) => void;
   onToggleFavorite: (id: string) => void;
   onArchiveBookmark: (id: string) => void;
+  onViewAnalysis?: (bookmark: Bookmark) => void;
   emptyMessage?: string;
 }
 
@@ -52,6 +53,7 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
   onDeleteBookmark,
   onToggleFavorite,
   onArchiveBookmark,
+  onViewAnalysis,
   emptyMessage = "No bookmarks found."
 }) => {
   // State for filtering and sorting
@@ -254,6 +256,7 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
               onDelete={onDeleteBookmark}
               onToggleFavorite={onToggleFavorite}
               onArchive={onArchiveBookmark}
+              onViewAnalysis={onViewAnalysis}
             />
           ))}
         </SimpleGrid>
@@ -267,6 +270,7 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
               onDelete={onDeleteBookmark}
               onToggleFavorite={onToggleFavorite}
               onArchive={onArchiveBookmark}
+              onViewAnalysis={onViewAnalysis}
             />
           ))}
         </Box>

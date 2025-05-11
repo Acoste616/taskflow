@@ -24,7 +24,8 @@ import {
   FiChevronDown,
   FiChevronRight,
   FiStar,
-  FiArchive
+  FiArchive,
+  FiCpu
 } from 'react-icons/fi';
 import { FaRobot } from 'react-icons/fa';
 import { useState, useEffect } from 'react';
@@ -139,6 +140,9 @@ const BookmarkSubmenu = () => {
             <Badge ml={2} colorScheme="gray" borderRadius="full">
               {archivedBookmarks.length}
             </Badge>
+          </NavItem>
+          <NavItem icon={FiCpu} to="/bookmarks/analysis">
+            AI Analyzer
           </NavItem>
         </Box>
       </Collapse>
