@@ -1,10 +1,123 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { analyzeBookmarkWithLLM } from '../services/llm';
 import { exportBookmarks } from '../services/export';
+import rateLimit from 'express-rate-limit';
 
 const prisma = new PrismaClient();
 const router = Router();
+
+// Rate limiting for quick bookmarks
+const quickBookmarkLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 50, // max 50 requests per windowMs
+  message: 'Too many bookmark requests, please try again later'
+});
+
+// POST /api/bookmarks/quick - Quick bookmark endpoint for mobile
+router.post('/quick', quickBookmarkLimiter, async (req: Request, res: Response) => {
+  try {
+    console.log('Quick bookmark received:', {
+      ...req.body,
+      ip: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+    
+    const { url, title, source = 'android', text } = req.body;
+    
+    // Validation
+    if (!url) {
+      return res.status(400).json({ 
+        error: 'URL is required',
+        code: 'MISSING_URL' 
+      });
+    }
+    
+    // Normalize URL
+    let normalizedUrl = url;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      normalizedUrl = `https://${url}`;
+    }
+    
+    // Validate URL
+    try {
+      new URL(normalizedUrl);
+    } catch (e) {
+      return res.status(400).json({ 
+        error: 'Invalid URL format',
+        code: 'INVALID_URL' 
+      });
+    }
+    
+    // Prepare data for analysis
+    const bookmarkData = {
+      link: normalizedUrl,
+      title: title || text || normalizedUrl,
+      source: source,
+      timestamp: new Date().toISOString()
+    };
+    
+    // Analyze with LLM
+    const analyzed = await analyzeBookmarkWithLLM(bookmarkData);
+    
+    // Save bookmark
+    const bookmark = await prisma.bookmark.create({
+      data: {
+        title: analyzed.title || bookmarkData.title,
+        category: analyzed.category || 'Uncategorized',
+        group: analyzed.group,
+        status: analyzed.status || 'Do przeczytania',
+        link: analyzed.link || normalizedUrl,
+        summary: analyzed.summary || '',
+        dateAdded: new Date(),
+        tags: {
+          connectOrCreate: (analyzed.tags || []).map((tag: string) => ({
+            where: { name: tag },
+            create: { name: tag }
+          }))
+        },
+        folder: analyzed.suggestedFolder ? {
+          connectOrCreate: {
+            where: { name: analyzed.suggestedFolder },
+            create: { name: analyzed.suggestedFolder }
+          }
+        } : undefined
+      },
+      include: {
+        tags: true,
+        folder: true
+      }
+    });
+    
+    // Return success with additional information
+    res.status(201).json({ 
+      success: true,
+      message: 'Bookmark saved successfully',
+      bookmark: {
+        id: bookmark.id,
+        title: bookmark.title,
+        url: bookmark.link,
+        category: bookmark.category,
+        tags: bookmark.tags.map(t => t.name)
+      }
+    });
+  } catch (err: any) {
+    console.error('Error in quick bookmark:', err);
+    
+    // More detailed error handling
+    if (err.code === 'P2002') {
+      return res.status(409).json({ 
+        error: 'Bookmark already exists',
+        code: 'DUPLICATE_BOOKMARK' 
+      });
+    }
+    
+    res.status(500).json({ 
+      error: err.message || 'Internal server error',
+      code: 'SERVER_ERROR'
+    });
+  }
+});
 
 // POST /api/bookmarks - dodawanie zakładki
 router.post('/', async (req, res) => {

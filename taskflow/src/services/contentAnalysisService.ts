@@ -4,14 +4,14 @@ import { type Bookmark } from '../models/Bookmark';
  * Konfiguracja lokalnego LLM
  */
 const LOCAL_LLM_CONFIG = {
-  endpoint: 'http://127.0.0.1:1234',
+  endpoint: 'http://localhost:1234/v1/chat/completions',
   // Dodajemy alternatywne endpointy
   alternativeEndpoints: [
-    'http://127.0.0.1:8080/v1/chat/completions',  // LM Studio
-    'http://127.0.0.1:11434/api/generate',        // Ollama
-    'http://127.0.0.1:5000/v1/completions'        // Text Generation WebUI
+    'http://localhost:1234/v1/completions',  // LM Studio alternatywny endpoint
+    'http://localhost:11434/api/generate',   // Ollama
+    'http://localhost:5000/v1/completions'   // Text Generation WebUI
   ],
-  model: 'deepseek-llama',
+  model: 'local-model',  // Zmień na nazwę twojego modelu w LM Studio
   maxTokens: 1500,        // Zwiększamy limit tokenów
   temperature: 0.1,       // Obniżamy temperaturę dla bardziej deterministycznych wyników
   timeout: 30000,         // Zwiększamy timeout do 30 sekund
@@ -70,6 +70,11 @@ export interface ContentAnalysis {
   analyzed: boolean;
   lastAnalyzed: Date;
   error?: string;
+  confidence?: number;
+  thoughtProcess?: {
+    initial: string;
+    refined: string;
+  };
 }
 
 /**
@@ -91,9 +96,13 @@ export class ContentAnalysisService {
   private isLLMAvailable = false;
   private readonly CACHE_KEY = 'content-analysis-cache';
   private workingEndpoint: string = LOCAL_LLM_CONFIG.endpoint;
+  private connectionError: string | null = null;
 
   constructor() {
     this.loadCache();
+    console.log('ContentAnalysisService initialized, checking LLM connection...');
+    // Uncomment below line to disable LLM and work in fallback mode
+    // this.isLLMAvailable = false;
     this.checkLLMConnection();
   }
 
@@ -101,6 +110,8 @@ export class ContentAnalysisService {
    * Check if local LLM is available and responsive
    */
   private async checkLLMConnection(): Promise<void> {
+    this.connectionError = null;
+    
     // Najpierw sprawdzamy domyślny endpoint
     let connected = await this.testEndpoint(LOCAL_LLM_CONFIG.endpoint);
     
@@ -117,8 +128,103 @@ export class ContentAnalysisService {
     
     this.isLLMAvailable = connected;
     console.log(`Local LLM connection test: ${this.isLLMAvailable ? 'Success' : 'Failed'}`);
+    
     if (this.isLLMAvailable) {
       console.log(`Using LLM endpoint: ${this.workingEndpoint}`);
+      this.connectionError = null;
+    } else {
+      this.connectionError = "Nie można połączyć się z lokalnym modelem LLM. Upewnij się, że LM Studio jest uruchomione i model jest załadowany.";
+      console.error(this.connectionError);
+    }
+  }
+  
+  /**
+   * Sprawdź połączenie z LM Studio (endpoint: http://127.0.0.1:1234)
+   */
+  public async checkLMStudioConnection(): Promise<{ connected: boolean, message: string }> {
+    const lmStudioEndpoint = 'http://localhost:1234/v1/chat/completions';
+    
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      // Sprawdź, czy LM Studio API jest dostępne
+      const response = await fetch(lmStudioEndpoint, {
+        method: 'HEAD',
+        signal: controller.signal
+      }).catch(() => null);
+      
+      clearTimeout(timeoutId);
+      
+      if (!response) {
+        return { 
+          connected: false, 
+          message: "LM Studio nie jest uruchomione lub jest niedostępne. Uruchom LM Studio i załaduj model." 
+        };
+      }
+      
+      // Test z rzeczywistym zapytaniem, aby sprawdzić czy model jest załadowany
+      const modelResponse = await fetch(lmStudioEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: "local-model",
+          messages: [
+            {"role": "system", "content": "You are a helpful AI assistant."},
+            {"role": "user", "content": "Say one word: Connected"}
+          ],
+          max_tokens: 20,
+          temperature: 0.1
+        })
+      });
+      
+      if (modelResponse.status === 404 || modelResponse.status === 400) {
+        try {
+          const errorData = await modelResponse.json();
+          if (errorData.error && errorData.error.message && 
+              (errorData.error.message.includes("No models loaded") || 
+               errorData.error.code === "model_not_found")) {
+            
+            return { 
+              connected: false, 
+              message: "LM Studio jest uruchomione, ale nie załadowano modelu. Uruchom LM Studio i wykonaj następujące kroki:\n1. Przejdź do zakładki 'Models'\n2. Wybierz model z listy lub pobierz nowy\n3. Kliknij 'Load' aby załadować model\n4. Przejdź do zakładki 'Chat' i upewnij się, że model działa" 
+            };
+          }
+        } catch (e) {
+          console.error("Failed to parse error response", e);
+        }
+        
+        return { 
+          connected: false, 
+          message: "LM Studio jest uruchomione, ale API zwraca błąd. Sprawdź czy model jest poprawnie załadowany." 
+        };
+      }
+      
+      // Teraz sprawdź, czy model jest załadowany
+      const connected = await this.testEndpoint(lmStudioEndpoint);
+      
+      if (connected) {
+        this.workingEndpoint = lmStudioEndpoint;
+        this.isLLMAvailable = true;
+        this.connectionError = null;
+        return { 
+          connected: true, 
+          message: "Połączono z LM Studio pomyślnie." 
+        };
+      } else {
+        return { 
+          connected: false, 
+          message: "LM Studio jest uruchomione, ale nie udało się uzyskać odpowiedzi z modelu. Upewnij się, że model jest załadowany i serwer API jest uruchomiony." 
+        };
+      }
+    } catch (error) {
+      console.error('Error checking LM Studio connection:', error);
+      return { 
+        connected: false, 
+        message: `Błąd podczas łączenia z LM Studio: ${error instanceof Error ? error.message : 'Nieznany błąd'}` 
+      };
     }
   }
   
@@ -127,6 +233,7 @@ export class ContentAnalysisService {
    */
   private async testEndpoint(endpoint: string): Promise<boolean> {
     try {
+      console.log(`Testing endpoint: ${endpoint}`);
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000); // Krótszy timeout dla testu
       
@@ -135,10 +242,10 @@ export class ContentAnalysisService {
       // Format żądania zależy od endpointu
       let requestData;
       
-      if (endpoint.includes('/v1/chat')) {
+      if (endpoint.includes('/v1/chat/completions')) {
         // Format zgodny z OpenAI Chat API
         requestData = {
-          model: LOCAL_LLM_CONFIG.model,
+          model: "local-model", // Fixed model name
           messages: [
             {"role": "system", "content": "You are a helpful AI assistant."},
             {"role": "user", "content": "Respond with one word: 'Connected'"}
@@ -149,7 +256,7 @@ export class ContentAnalysisService {
       } else if (endpoint.includes('ollama')) {
         // Format Ollama
         requestData = {
-          model: LOCAL_LLM_CONFIG.model,
+          model: "llama2", // Common Ollama model 
           prompt: testPrompt,
           stream: false
         };
@@ -162,6 +269,8 @@ export class ContentAnalysisService {
         };
       }
       
+      console.log(`Sending request to ${endpoint}:`, requestData);
+      
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
@@ -173,28 +282,60 @@ export class ContentAnalysisService {
       
       clearTimeout(timeoutId);
       
-      if (!response.ok) {
-        return false;
+      console.log(`Response status: ${response.status}`);
+      
+      // Check if server is responding, even with an error
+      if (response.status === 200) {
+        const data = await response.json();
+        console.log(`Response data:`, data);
+        
+        // LM Studio server appears to be running with some response
+        // Check if this is a "No models loaded" error
+        if (data.error && data.error.message && data.error.message.includes("No models loaded")) {
+          console.warn(`LLM server is running but no models are loaded: ${endpoint}`);
+          this.connectionError = "LM Studio uruchomione, ale nie załadowano modelu. Przejdź do LM Studio i załaduj model.";
+          return false;
+        }
+        
+        // If we get any text output, consider it successful 
+        // (since the actual "Connected" response may vary by model)
+        let responseText = '';
+        
+        if (data.choices && data.choices.length > 0) {
+          responseText = data.choices[0].message?.content || data.choices[0].text || '';
+        } else if (data.response) {
+          responseText = data.response;
+        } else if (data.generated_text) {
+          responseText = data.generated_text;
+        } else if (typeof data === 'string') {
+          responseText = data;
+        }
+        
+        console.log(`Extracted text: ${responseText}`);
+        
+        // Consider a non-empty response as successful
+        if (responseText && responseText.length > 0) {
+          return true;
+        }
+      } else if (response.status === 404 || response.status === 400) {
+        // Check if this is a model not found error (common with LM Studio)
+        try {
+          const errorData = await response.json();
+          if (errorData.error && errorData.error.message && 
+              (errorData.error.message.includes("No models loaded") || 
+               errorData.error.code === "model_not_found")) {
+            console.warn(`LLM error: No models loaded at ${endpoint}`);
+            this.connectionError = "LM Studio uruchomione, ale nie załadowano modelu. Przejdź do LM Studio i załaduj model.";
+          }
+        } catch (e) {
+          // If we can't parse the error, just log it
+          console.error("Failed to parse error response", e);
+        }
       }
       
-      const data = await response.json();
-      
-      // Sprawdzamy różne formaty odpowiedzi
-      let responseText = '';
-      
-      if (data.choices && data.choices.length > 0) {
-        responseText = data.choices[0].message?.content || data.choices[0].text || '';
-      } else if (data.response) {
-        responseText = data.response;
-      } else if (data.generated_text) {
-        responseText = data.generated_text;
-      } else if (typeof data === 'string') {
-        responseText = data;
-      }
-      
-      return responseText.toLowerCase().includes('connected');
+      return false;
     } catch (error) {
-      console.warn(`Failed to connect to LLM endpoint ${endpoint}:`, error);
+      console.error(`Failed to connect to LLM endpoint ${endpoint}:`, error);
       return false;
     }
   }
@@ -219,7 +360,9 @@ export class ContentAnalysisService {
         let requestData;
         const endpoint = this.workingEndpoint;
         
-        if (endpoint.includes('/v1/chat')) {
+        console.log(`Calling LLM endpoint: ${endpoint} (attempt ${attempt + 1}/${LOCAL_LLM_CONFIG.retryCount})`);
+        
+        if (endpoint.includes('/v1/chat/completions')) {
           // Format zgodny z OpenAI Chat API
           requestData = {
             model: LOCAL_LLM_CONFIG.model,
@@ -268,10 +411,13 @@ ${prompt}
         clearTimeout(timeoutId);
     
         if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
+          const errorText = await response.text();
+          console.error(`Error response from LLM: ${errorText}`);
+          throw new Error(`HTTP error! Status: ${response.status}, Details: ${errorText}`);
         }
     
         const data = await response.json();
+        console.log('LLM response received successfully');
         
         // Obsługa różnych formatów odpowiedzi
         if (data.choices && data.choices.length > 0) {
@@ -601,7 +747,7 @@ ${prompt}
     // Check if local LLM is available
     if (!this.isLLMAvailable) {
       console.log('Local LLM not available, using rule-based analysis');
-      return this.enhanceWithRules(analysis, initialTags, contentContext);
+      return this.enhanceWithRules(analysis, initialTags || [], contentContext);
     }
 
     try {
@@ -623,10 +769,16 @@ Przeprowadź głęboką analizę powyższej treści i wyodrębnij następujące 
 6. Sugerowane tagi (5-7 krótkich słów kluczowych, które dobrze opisują treść)
 7. Określ wartość merytoryczną treści (wysoka, średnia, niska)
 8. Sugerowany folder dla organizacji tej zakładki
+9. Poziom pewności analizy (wartość od 0.0 do 1.0)
 
 FORMAT ODPOWIEDZI:
-Zwróć odpowiedź jako prawidłowy obiekt JSON o następującej strukturze:
+Swój tok myślenia umieść w sekcji <think>...</think>, a następnie zwróć odpowiedź jako poprawnie sformatowany obiekt JSON w bloku:
 
+<think>
+Tutaj opisz swój tok myślenia, jak analizujesz treść...
+</think>
+
+\`\`\`json
 {
   "summary": "zwięzłe podsumowanie",
   "mainTopic": "główny temat",
@@ -635,10 +787,10 @@ Zwróć odpowiedź jako prawidłowy obiekt JSON o następującej strukturze:
   "sentiment": "pozytywny|negatywny|neutralny",
   "contentValue": "wysoka|średnia|niska",
   "suggestedTags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
-  "suggestedFolder": "nazwa folderu"
+  "suggestedFolder": "nazwa folderu",
+  "confidence": 0.85
 }
-
-NIE DODAWAJ żadnych wyjaśnień, wstępów ani dodatkowego tekstu. Zwróć WYŁĄCZNIE obiekt JSON.
+\`\`\`
       `;
 
       // Wywołaj lokalny LLM
@@ -646,84 +798,220 @@ NIE DODAWAJ żadnych wyjaśnień, wstępów ani dodatkowego tekstu. Zwróć WYŁ
 
       if (responseContent && responseContent.trim()) {
         try {
-          // Find JSON in the response (in case the model includes extra text)
-          const jsonRegex = /\{[\s\S]*?\}(?=\s*$)/;
-          const jsonMatch = responseContent.match(jsonRegex);
-          const jsonStr = jsonMatch ? jsonMatch[0] : responseContent;
-          
-          // Clean response from formatting that might interfere
-          const cleanedJson = jsonStr
-            .replace(/```json/g, '')
-            .replace(/```/g, '')
-            .trim();
-          
-          // Parse response as JSON
-          const llmAnalysis = JSON.parse(cleanedJson);
-          
-          // Update analysis
-          if (llmAnalysis.summary) analysis.summary = llmAnalysis.summary;
-          if (llmAnalysis.mainTopic) analysis.mainTopic = llmAnalysis.mainTopic;
-          if (llmAnalysis.keypoints && Array.isArray(llmAnalysis.keypoints)) {
-            analysis.keypoints = llmAnalysis.keypoints.filter((point: any) => point && typeof point === 'string');
-          }
-          
-          // Categories
-          if (llmAnalysis.categories && Array.isArray(llmAnalysis.categories)) {
-            const validCategories = llmAnalysis.categories
-              .filter((cat: string) => cat && typeof cat === 'string')
-              .map((cat: string) => this.mapToContentCategory(cat.toLowerCase()))
-              .filter((cat: ContentCategory) => cat !== ContentCategory.OTHER || analysis.categories.length === 0);
-            
-            if (validCategories.length > 0) {
-              analysis.categories = validCategories;
-            }
-          }
-          
-          // Sentiment
-          if (llmAnalysis.sentiment && ['positive', 'negative', 'neutral'].includes(llmAnalysis.sentiment)) {
-            analysis.sentiment = llmAnalysis.sentiment as 'positive' | 'negative' | 'neutral';
-          }
-          
-          // Content value
-          if (llmAnalysis.contentValue) {
-            analysis.contentValue = llmAnalysis.contentValue;
-          }
-          
-          // Suggested folder
-          if (llmAnalysis.suggestedFolder) {
-            analysis.suggestedFolder = llmAnalysis.suggestedFolder;
-          }
-          
-          // Tags
-          if (llmAnalysis.suggestedTags && Array.isArray(llmAnalysis.suggestedTags)) {
-            const validTags = llmAnalysis.suggestedTags
-              .filter((tag: string) => tag && typeof tag === 'string')
-              .map((tag: string) => tag.toLowerCase().trim());
-            
-            // Combine tags, eliminating duplicates
-            if (validTags.length > 0) {
-              analysis.suggestedTags = [...new Set([...initialTags, ...validTags])];
-            }
-          }
-          
-          // Mark analysis as completed
-          analysis.analyzed = true;
-        } catch (parseError) {
-          console.error('Error parsing LLM response:', parseError);
           console.log('Raw response:', responseContent);
-          // On parsing error, use rule-based analysis
-          return this.enhanceWithRules(analysis, initialTags, contentContext);
+          
+          // First, directly extract thinking process
+          const thinkingProcess = this.extractThinkingProcess(responseContent);
+          
+          // Store thinking process if found
+          if (thinkingProcess) {
+            console.log(`Extracted thinking process (${thinkingProcess.length} chars)`);
+            analysis.thoughtProcess = {
+              initial: thinkingProcess,
+              refined: ''
+            };
+          } else {
+            console.log('No thinking process extracted');
+          }
+          
+          // Next, extract and parse JSON
+          const jsonContent = this.extractJSONFromResponse(responseContent);
+          
+          if (!jsonContent) {
+            console.log('No JSON content found in response');
+            // Return analysis with only the thinking process if we have it
+            if (analysis.thoughtProcess) {
+              // Use rule-based analysis for the rest of the fields
+              const ruleBasedAnalysis = await this.enhanceWithRules(analysis, initialTags || [], contentContext);
+              ruleBasedAnalysis.thoughtProcess = analysis.thoughtProcess;
+              return ruleBasedAnalysis;
+            }
+            
+            return this.enhanceWithRules(analysis, initialTags || [], contentContext);
+          }
+          
+          // Parse JSON content
+          try {
+            const llmAnalysis = JSON.parse(jsonContent);
+            
+            // Update analysis with JSON content
+            if (llmAnalysis.summary) analysis.summary = llmAnalysis.summary;
+            if (llmAnalysis.mainTopic) analysis.mainTopic = llmAnalysis.mainTopic;
+            if (llmAnalysis.keypoints && Array.isArray(llmAnalysis.keypoints)) {
+              analysis.keypoints = llmAnalysis.keypoints.filter((point: any) => point && typeof point === 'string');
+            }
+            
+            // Categories
+            if (llmAnalysis.categories && Array.isArray(llmAnalysis.categories)) {
+              const validCategories = llmAnalysis.categories
+                .filter((cat: string) => cat && typeof cat === 'string')
+                .map((cat: string) => this.mapToContentCategory(cat.toLowerCase()))
+                .filter((cat: ContentCategory) => cat !== ContentCategory.OTHER || analysis.categories.length === 0);
+              
+              if (validCategories.length > 0) {
+                analysis.categories = validCategories;
+              }
+            }
+            
+            // Sentiment
+            if (llmAnalysis.sentiment && ['positive', 'negative', 'neutral'].includes(llmAnalysis.sentiment)) {
+              analysis.sentiment = llmAnalysis.sentiment as 'positive' | 'negative' | 'neutral';
+            }
+            
+            // Content value
+            if (llmAnalysis.contentValue) {
+              analysis.contentValue = llmAnalysis.contentValue;
+            }
+            
+            // Suggested folder
+            if (llmAnalysis.suggestedFolder) {
+              analysis.suggestedFolder = llmAnalysis.suggestedFolder;
+            }
+            
+            // Confidence
+            if (llmAnalysis.confidence && typeof llmAnalysis.confidence === 'number') {
+              analysis.confidence = llmAnalysis.confidence;
+            }
+            
+            // Tags
+            if (llmAnalysis.suggestedTags && Array.isArray(llmAnalysis.suggestedTags)) {
+              const validTags = llmAnalysis.suggestedTags
+                .filter((tag: string) => tag && typeof tag === 'string')
+                .map((tag: string) => tag.toLowerCase().trim());
+              
+              // Combine tags, eliminating duplicates
+              if (validTags.length > 0) {
+                analysis.suggestedTags = [...new Set([...(initialTags || []), ...validTags])];
+              }
+            }
+            
+            // Mark analysis as completed
+            analysis.analyzed = true;
+          } catch (jsonError) {
+            console.error('Error parsing JSON part:', jsonError);
+            // Keep the thinking process but use rule-based for the rest
+            const ruleBasedAnalysis = await this.enhanceWithRules(analysis, initialTags || [], contentContext);
+            if (analysis.thoughtProcess) {
+              ruleBasedAnalysis.thoughtProcess = analysis.thoughtProcess;
+            }
+            return ruleBasedAnalysis;
+          }
+        } catch (error) {
+          console.error('Error processing LLM response:', error);
+          return this.enhanceWithRules(analysis, initialTags || [], contentContext);
         }
       } else {
         console.warn('Empty LLM response, falling back to rule-based analysis');
-        return this.enhanceWithRules(analysis, initialTags, contentContext);
+        return this.enhanceWithRules(analysis, initialTags || [], contentContext);
       }
 
       return analysis;
     } catch (error) {
       console.error('Error in LLM analysis:', error);
       // On any error, use rule-based analysis
-      return this.enhanceWithRules(analysis, initialTags, contentContext);
+      return this.enhanceWithRules(analysis, initialTags || [], contentContext);
+    }
+  }
+  
+  /**
+   * Extract thinking process from <think> tags
+   */
+  private extractThinkingProcess(response: string): string | null {
+    try {
+      // Direct check for <think> tag at the beginning
+      if (response.trim().startsWith('<think>')) {
+        console.log("Response starts with <think> tag");
+        
+        // Get everything between <think> and the first occurrence of ```json
+        const endIndex = response.indexOf('```json');
+        if (endIndex > -1) {
+          const thinkContent = response.substring(7, endIndex).trim();
+          console.log("Successfully extracted thinking content of length:", thinkContent.length);
+          return thinkContent;
+        }
+      }
+      
+      // Fallback to regex patterns
+      console.log("Trying regex patterns for think tag");
+      
+      // First try the standard format with closing tag
+      const thinkMatch = response.match(/<think>([\s\S]*?)<\/think>/);
+      if (thinkMatch && thinkMatch[1]) {
+        console.log("Found thinking process with closing tag");
+        return thinkMatch[1].trim();
+      }
+      
+      // Try to match just the <think> tag up to the JSON block
+      const simpleThinkMatch = response.match(/<think>([\s\S]*?)```json/);
+      if (simpleThinkMatch && simpleThinkMatch[1]) {
+        console.log("Found thinking process with simple match");
+        return simpleThinkMatch[1].trim();
+      }
+      
+      console.log("No thinking process found with current patterns");
+      return null;
+    } catch (error) {
+      console.error('Error extracting thinking process:', error);
+      return null;
+    }
+  }
+  
+  /**
+   * Extract JSON content from LLM response
+   * Handles different formats including <think> tags
+   */
+  private extractJSONFromResponse(response: string): string | null {
+    try {
+      // Direct extraction using ```json markers
+      const jsonStart = response.indexOf('```json');
+      if (jsonStart > -1) {
+        const contentStart = jsonStart + 7; // Length of ```json
+        const jsonEnd = response.indexOf('```', contentStart);
+        
+        if (jsonEnd > contentStart) {
+          const jsonContent = response.substring(contentStart, jsonEnd).trim();
+          console.log("Extracted JSON with direct method");
+          return jsonContent;
+        }
+      }
+      
+      // Fallback to regex patterns
+      console.log("Trying regex patterns for JSON");
+      
+      // Check for JSON code block format (```json ... ```)
+      const codeBlockMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
+      if (codeBlockMatch && codeBlockMatch[1]) {
+        console.log("Found JSON in code block");
+        return codeBlockMatch[1].trim();
+      }
+      
+      // Fallback: look for any JSON object in the response
+      const jsonRegex = /(\{[\s\S]*\})/g;
+      const matches = response.match(jsonRegex);
+      
+      if (matches && matches.length > 0) {
+        console.log("Found JSON with regex, validating...");
+        
+        // Try the last match first (most likely to be the final result)
+        for (let i = matches.length - 1; i >= 0; i--) {
+          try {
+            const match = matches[i];
+            // Validate it's proper JSON
+            JSON.parse(match);
+            console.log(`Valid JSON found at match ${i+1}/${matches.length}`);
+            return match;
+          } catch (e) {
+            console.log(`Match ${i+1} is not valid JSON`);
+            // Continue to next match
+          }
+        }
+      }
+      
+      console.log("No valid JSON found in response");
+      return null;
+    } catch (error) {
+      console.error('Error extracting JSON from response:', error);
+      return null;
     }
   }
 
@@ -775,7 +1063,7 @@ NIE DODAWAJ żadnych wyjaśnień, wstępów ani dodatkowego tekstu. Zwróć WYŁ
    */
   private enhanceWithRules(
     analysis: ContentAnalysis, 
-    initialTags: string[], 
+    initialTags: string[] = [], 
     contentContext: string
   ): Promise<ContentAnalysis> {
     return new Promise(resolve => {
@@ -829,7 +1117,7 @@ NIE DODAWAJ żadnych wyjaśnień, wstępów ani dodatkowego tekstu. Zwróć WYŁ
       }
       
       // Generate suggested tags from content and existing categories
-      const suggestedTags = [...initialTags];
+      const suggestedTags = [...(initialTags || [])];
       
       // Add category names as tags
       categories.forEach(category => {
@@ -934,6 +1222,13 @@ NIE DODAWAJ żadnych wyjaśnień, wstępów ani dodatkowego tekstu. Zwróć WYŁ
   public isLLMEnabled(): boolean {
     return this.isLLMAvailable;
   }
+  
+  /**
+   * Get current connection error if any
+   */
+  public getConnectionError(): string | null {
+    return this.connectionError;
+  }
 
   /**
    * Manually trigger LLM connection check and reset workingEndpoint
@@ -983,6 +1278,14 @@ NIE DODAWAJ żadnych wyjaśnień, wstępów ani dodatkowego tekstu. Zwróć WYŁ
     }
     
     return results;
+  }
+
+  /**
+   * Wyłącz LLM i przejdź w tryb analizy opartej na regułach
+   */
+  public disableLLM(): void {
+    this.isLLMAvailable = false;
+    console.log('LLM disabled, switching to rule-based analysis only');
   }
 }
 

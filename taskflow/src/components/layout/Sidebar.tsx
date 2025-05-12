@@ -25,7 +25,8 @@ import {
   FiChevronRight,
   FiStar,
   FiArchive,
-  FiCpu
+  FiCpu,
+  FiGitBranch
 } from 'react-icons/fi';
 import { FaRobot } from 'react-icons/fa';
 import { useState, useEffect } from 'react';
@@ -197,6 +198,10 @@ const Sidebar = () => {
         
         <NavItem icon={FaRobot} to="/analysis">
           Analiza AI
+        </NavItem>
+        
+        <NavItem icon={FiGitBranch} to="/cort-demo">
+          CoRT Demo
         </NavItem>
         
         <NavItem icon={FiPieChart} to="/analytics">

@@ -11,6 +11,8 @@ import AnalyticsPage from './pages/AnalyticsPage';
 import SettingsPage from './pages/SettingsPage';
 import BookmarkAnalysis from './components/BookmarkAnalysis';
 import BookmarkAnalysisPage from './pages/BookmarkAnalysisPage';
+import CoRTDemoPage from './pages/CoRTDemoPage';
+import MobileBookmark from './pages/MobileBookmark';
 import { useState, useEffect } from 'react';
 
 // Extended theme for Chakra UI with custom components and colors
@@ -215,6 +217,18 @@ const router = createBrowserRouter(
     {
       path: "/analysis",
       element: <BookmarkAnalysis />
+    },
+    {
+      path: "/cort-demo",
+      element: <CoRTDemoPage />
+    },
+    {
+      path: "/mobile",
+      element: <MobileBookmark />
+    },
+    {
+      path: "/share",
+      element: <MobileBookmark />
     },
     {
       path: "*",

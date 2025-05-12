@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saving bookmark...</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f7fafc;
+            color: #2d3748;
+        }
+        .container {
+            text-align: center;
+            padding: 2rem;
+            max-width: 90%;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            background-color: white;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #3182ce;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+    <script>
+        // Automatically redirect to the app with parameters
+        window.onload = function() {
+            const params = new URLSearchParams(window.location.search);
+            let sharedText = params.get('android.intent.extra.TEXT') || '';
+            let sharedTitle = params.get('android.intent.extra.SUBJECT') || '';
+            
+            // Extract URL from text
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            const urls = sharedText.match(urlRegex);
+            const url = urls ? urls[0] : sharedText;
+            
+            // Redirect to the app
+            setTimeout(function() {
+                window.location.href = `/mobile?url=${encodeURIComponent(url)}&title=${encodeURIComponent(sharedTitle)}`;
+            }, 500); // Small delay to show the loading animation
+        };
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="spinner"></div>
+        <h2>Preparing to save bookmark...</h2>
+        <p>Please wait while we process your request.</p>
+    </div>
+</body>
+</html> 

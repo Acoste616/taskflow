@@ -24,6 +24,7 @@ import {
 import { FiExternalLink, FiRefreshCw, FiCpu, FiTag, FiInfo } from 'react-icons/fi';
 import { contentAnalysisService } from '../../../services/contentAnalysisService';
 import type { Bookmark } from '../../../models/Bookmark';
+import ThoughtProcessViewer from './ThoughtProcessViewer';
 
 interface EnhancedBookmarkAnalysisProps {
   bookmark: Bookmark;
@@ -298,6 +299,17 @@ const EnhancedBookmarkAnalysis: React.FC<EnhancedBookmarkAnalysisProps> = ({
             </AccordionPanel>
           </AccordionItem>
         </Accordion>
+        
+        {/* Display thought process if available */}
+        {analysis.thoughtProcess && (
+          <>
+            <Divider my={4} />
+            <ThoughtProcessViewer 
+              thoughtProcess={analysis.thoughtProcess}
+              confidence={analysis.confidence}
+            />
+          </>
+        )}
         
         {/* Actions */}
         <HStack justifyContent="space-between">

@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import helmet from 'helmet';
 import bookmarksRouter from './routes/bookmarks';
 import tagsRouter from './routes/tags';
 import foldersRouter from './routes/folders';
@@ -9,8 +10,32 @@ dotenv.config();
 
 const app = express();
 
-app.use(cors());
-app.use(express.json());
+// Improved CORS configuration
+const allowedOrigins = [
+  'https://bookmarks.twoja-domena.com',
+  'http://localhost:3000',
+  'http://localhost:5173' // Vite dev server
+];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = `The CORS policy for this site does not allow access from the specified origin: ${origin}`;
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  credentials: true
+}));
+
+// Add security middleware
+app.use(helmet());
+
+// Increase JSON payload limit for larger bookmarks
+app.use(express.json({ limit: '2mb' }));
 
 // Routery
 app.use('/api/bookmarks', bookmarksRouter);

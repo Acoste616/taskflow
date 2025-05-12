@@ -1,0 +1,35 @@
+{
+  "name": "TaskFlow Bookmarks",
+  "short_name": "Bookmarks",
+  "description": "Save and analyze bookmarks with AI",
+  "start_url": "/mobile",
+  "display": "standalone",
+  "theme_color": "#3182CE",
+  "background_color": "#ffffff",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "logo192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "logo512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "share_target": {
+    "action": "/share",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  }
+} 
