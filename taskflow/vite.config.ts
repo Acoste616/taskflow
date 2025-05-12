@@ -10,6 +10,13 @@ export default defineConfig({
     }
   },
   server: {
+    host: true,
+    port: 5173,
+    cors: true,
+    hmr: {
+      clientPort: 443,
+      port: 5173
+    },
     proxy: {
       '/v1/chat/completions': {
         target: 'http://localhost:1234',

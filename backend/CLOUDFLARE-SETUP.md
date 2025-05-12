@@ -54,17 +54,17 @@ tunnel: taskflow-bookmarks
 credentials-file: C:\Users\YourUsername\.cloudflared\<UUID>.json
 
 ingress:
-  - hostname: bookmarks.your-domain.com
+  - hostname: bookmarks.twoja-domena.com
     service: http://localhost:3001
   - service: http_status:404
 ```
 
-Replace `YourUsername` with your Windows username and `your-domain.com` with your domain registered on Cloudflare.
+Replace `YourUsername` with your Windows username and `twoja-domena.com` with your domain registered on Cloudflare.
 
 ### 5. Set up DNS
 
 ```powershell
-cloudflared tunnel route dns taskflow-bookmarks bookmarks.your-domain.com
+cloudflared tunnel route dns taskflow-bookmarks bookmarks.twoja-domena.com
 ```
 
 This will create a CNAME record pointing to your tunnel.
@@ -72,7 +72,16 @@ This will create a CNAME record pointing to your tunnel.
 ### 6. Run the Tunnel
 
 ```powershell
+# Standardowe uruchomienie
 cloudflared tunnel run taskflow-bookmarks
+
+# Jeśli cloudflared nie jest w PATH, dodaj tymczasowo ścieżkę
+$env:Path += ";C:\Program Files (x86)\cloudflared"
+cloudflared tunnel run taskflow-bookmarks
+
+# Lub użyj bezpośrednio pełnej ścieżki
+$cloudflaredPath = "C:\Program Files (x86)\cloudflared\cloudflared.exe"
+& $cloudflaredPath tunnel run taskflow-bookmarks
 ```
 
 ### 7. Run as a Windows Service (Optional)
@@ -87,7 +96,7 @@ cloudflared service install
 
 1. Make sure your backend is running on port 3001
 2. Start the tunnel if not already running
-3. Visit `https://bookmarks.your-domain.com` in your browser
+3. Visit `https://bookmarks.twoja-domena.com` in your browser
 
 ## Troubleshooting
 
@@ -102,7 +111,6 @@ cloudflared tunnel info taskflow-bookmarks
 ```powershell
 cloudflared tunnel info taskflow-bookmarks
 ```
-
 ### Delete Tunnel (if needed)
 
 ```powershell
